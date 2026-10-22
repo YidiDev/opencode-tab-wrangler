@@ -1,0 +1,248 @@
+# OpenCode Tab Wrangler
+
+Configurable tab housekeeping for the **OpenCode 2.1.4 terminal**, inspired by Chrome's Tab Wrangler. Keep tabs that matter; corral the rest without deleting their sessions.
+
+**Preview release. Not published to npm.** Defaults to preview mode. No model calls, backend service, MCP server, telemetry, or access to transcript contents.
+
+## Install locally
+
+```sh
+git clone git@github.com:YidiDev/opencode-tab-wrangler.git
+cd opencode-tab-wrangler
+bun install --frozen-lockfile
+bun run check
+```
+
+Add the local checkout to your **global** `~/.config/opencode/cli.json` (merge with your existing plugins):
+
+```json
+{
+  "$schema": "https://opencode.ai/v2/cli.json",
+  "plugins": [
+    {
+      "package": "/absolute/path/to/opencode-tab-wrangler",
+      "options": {}
+    }
+  ]
+}
+```
+
+Use your own absolute checkout path if different. OpenCode reloads CLI configuration when it changes. Run `/wrangler` or choose **Tab Wrangler** from the command palette. Don't register the same package twice. This plugin has only a `./tui` entrypoint; it does not belong in server configuration.
+
+The plugin **does not install or enable itself**, and this repository does not change your OpenCode settings. Other OpenCode versions are rejected safely until tested.
+
+## First use
+
+1. Inspect **Open tabs / protection inspector**. Preview never closes tabs by itself.
+2. In **Settings**, choose a unique `connectionKey` for this server, such as `local-main`.
+3. Read the shared-tab warning and enable `acknowledgeSharedTabs` only if appropriate.
+4. Try **Preview and clean eligible tabs** for a confirmed manual batch.
+5. Set `mode` to `auto` when satisfied. All protections remain enabled by default.
+
+### Important safety limitations
+
+- Closing means **removing a tab only**. No session delete, archive, interrupt, question-answer, or permission-approval APIs are used.
+- The locally selected tab, running work in its family, unresolved busy state, unknown state, and explicitly locked tabs are protected.
+- **OpenCode shares tab layouts across terminal instances. Other terminals' selected tabs are not visible through the plugin API.** The acknowledgement is not a cross-terminal lock. Prefer running automatic cleanup in one terminal, with no competing clients managing the same layout. If that limitation is unacceptable, remain in preview mode.
+- Unread state uses OpenCode's native indicator. Viewed state is server-global: reading a session in another client can clear unread here. Root unread state reflects root completion, while child waiting/running states are checked separately.
+- Fresh public API reads plus a final synchronous local recheck reduce races. There is **no atomic conditional-close API**: execution or a question can begin after the last server response and before its event reaches this terminal.
+- The host tab API acknowledges a close request before disk persistence completes. Wrangler waits for disappearance. If it cannot confirm the result, it records `uncertain` and will not automatically retry that session while the entry remains in retained history.
+- Drafts are preserved in memory by OpenCode across prompt remounts in 2.1.4. Wrangler does not read or store drafts, and cannot make them durable across application exit. Closing tabs is not a draft backup mechanism.
+- `connectionKey` is a **user-supplied namespace**, not detected server identity. Change it when connecting to another server; do not reuse it for unrelated servers. History cannot be safely mapped across servers automatically.
+
+## Controls
+
+| Palette command                  | Purpose                                                                |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| Tab Wrangler (`/wrangler`)       | Open the manager                                                       |
+| Wrangler: inspect tabs           | Search open tabs and inspect all protection reasons                    |
+| Wrangler: clean eligible tabs    | Preview and confirm one safe batch                                     |
+| Wrangler: open corral            | Search/reopen closed tabs, restore all, forget entries                 |
+| Wrangler: settings               | Edit settings, nested toggles, ordered rules, or full preferences JSON |
+| Wrangler: pause / resume         | Pause indefinitely, for a preset, or for custom minutes                |
+| Wrangler: reopen last closed tab | Restore the most recent retained entry                                 |
+
+No shortcuts are taken by default. The command IDs are `wrangler.open`, `wrangler.preview`, `wrangler.cleanup`, `wrangler.corral`, `wrangler.settings`, `wrangler.pause`, and `wrangler.restore`. Bind them in `cli.json` under `keybinds`, for example `"wrangler.open": "ctrl+g"` if that shortcut is available in your setup.
+
+Open-tab details offer permanent locks, temporary snoozes, unlock, focus, and one-click exclusions for the session/project/directory. One-click exclusions are prepended as stopping rules so they take precedence. These are **logical locks** in Wrangler, not native pins or a replacement tab strip. They do not prevent you from closing a tab yourself. Temporary locks and pauses accept positive durations up to one year.
+
+The Corral's footer actions are **Ctrl+R** (restore all, with confirmation) and **Ctrl+X** (clear this connection's history, with confirmation). Restore one entry in the background or focus it. Already-open tabs aren't duplicated or moved. Unavailable sessions retain their history entry. Forgetting an entry never deletes a session.
+
+## Configuration
+
+All properties below live inside the plugin's `options` object. The generated [`schema.json`](schema.json) describes those options, not the entire `cli.json` file.
+
+Precedence: **defaults → saved UI preferences → explicit file options**. Nested objects merge; arrays replace. File-controlled fields are read-only in the UI. A partial file-controlled object still allows editing its other fields. Changes grant a fresh grace period. Reset UI preferences by editing **all UI preferences as JSON** to `{}`; this doesn't remove file overrides, locks, or history.
+
+Invalid settings, unsupported state versions, or recovery-storage failures disable the plugin without closing tabs. Unknown setting names are rejected, not ignored. There is no arbitrary code/regex policy execution.
+
+### General settings
+
+| Option                  | Default          | Meaning                                                                                   |
+| ----------------------- | ---------------- | ----------------------------------------------------------------------------------------- |
+| `mode`                  | `"preview"`      | `preview`, `auto`, or `off`; manual cleanup allowed in preview only after confirmation    |
+| `connectionKey`         | `"unconfigured"` | Unique namespace per server; must be changed before closure                               |
+| `acknowledgeSharedTabs` | `false`          | Explicit acknowledgement required for any closure                                         |
+| `idleMinutes`           | `30`             | Minimum time since qualifying activity; 0 permits immediate eligibility after grace       |
+| `graceMinutes`          | `30`             | Minimum grace after observation begins or a protection clears                             |
+| `excluded`              | `false`          | Exclude all tabs by default; rules can opt selected matches back in                       |
+| `checkSeconds`          | `30`             | Scheduler interval; integer 5–3600                                                        |
+| `minTabs`               | `5`              | Hard retained-tab floor, counting protected tabs                                          |
+| `softMaxTabs`           | `null`           | Optional target for `over-limit` cleanup; never overrides protections or timers           |
+| `cleanup`               | `"all-idle"`     | Close eligible idle tabs down to the floor, or `over-limit` only down to the soft maximum |
+| `order`                 | `"oldest-idle"`  | `oldest-idle`, `oldest-opened`, `left-to-right`, `right-to-left`                          |
+| `batchSize`             | `3`              | Maximum closes per manual/automatic pass; integer 1–100                                   |
+| `batchDelaySeconds`     | `2`              | Delay between closes, also minimum gap after the last successful automatic batch          |
+| `notification`          | `"summary"`      | One summary toast per successful batch, or `silent`                                       |
+
+For `over-limit`, `softMaxTabs` is required and must be at least `minTabs`. In `all-idle` mode the soft maximum does not limit cleanup. A floor of zero still cannot override selected/running protections. Protected tabs may exceed the soft maximum indefinitely.
+
+### Independent protections
+
+Every flag defaults to `true`:
+
+```json
+{
+  "protections": {
+    "unreadActivity": true,
+    "unreadErrors": true,
+    "questions": true,
+    "permissions": true,
+    "pending": true,
+    "attention": true
+  }
+}
+```
+
+`attention` is the native aggregate waiting indicator. **To allow closing question- or permission-waiting tabs, disable both the corresponding flag and `attention`** for that policy. This deliberate overlap prevents an unknown attention subtype from being silently treated as idle. Disabling protections is advanced behavior and the UI requests confirmation.
+
+Pending means queued execution/control inbox work, not parked synthetic context. Running work, local selection, unknown state, and unknown busy signals cannot be opted out of. Root tabs protect running/waiting descendants, even if the child has a different directory. Families over 256 sessions fail closed rather than performing unbounded scans.
+
+### Which activity resets the timer?
+
+```json
+{
+  "activity": {
+    "selection": true,
+    "sessionUpdates": true,
+    "backgroundEvents": true
+  }
+}
+```
+
+- `selection`: viewing a tab refreshes its last-use time.
+- `sessionUpdates`: newer family metadata timestamps refresh last use.
+- `backgroundEvents`: message-content, execution, inbox, permission, and form events refresh last use. Metadata refreshes alone are not these events.
+
+The closure deadline is the **later** of last activity + idle interval and last grace reset + grace interval. A selected or protected tab cannot become eligible; clearing a protection starts fresh idle and grace intervals, even with optional activity sources disabled.
+
+Startup, reload, reopening, resume, re-enabling native tabs, observation gaps, clock rollback, and configuration changes grant fresh grace. Time spent while the plugin is absent is not counted. A restored tab cannot immediately disappear into an auto-close loop. Pause is local to a TUI, survives plugin reload, and ends when that TUI exits.
+
+### Ordered project/title rules
+
+Rules override `idleMinutes`, `graceMinutes`, `excluded`, nested `protections`, and nested `activity`. Match properties are ANDed; omitted properties are unrestricted. An empty match applies to everything. All enabled matching rules apply in order; later values win. `stop: true` ends evaluation after that match.
+
+```json
+{
+  "rules": [
+    {
+      "name": "Keep production projects",
+      "match": { "directory": "*/production/*" },
+      "set": { "excluded": true },
+      "stop": true
+    },
+    {
+      "name": "Long-lived research",
+      "match": { "title": "*research*" },
+      "set": { "idleMinutes": 180, "graceMinutes": 60 }
+    },
+    {
+      "name": "Short-lived scratch work",
+      "match": { "directory": "*/scratch/*", "title": "*experiment*" },
+      "set": {
+        "idleMinutes": 10,
+        "graceMinutes": 10,
+        "protections": { "unreadActivity": false }
+      }
+    }
+  ]
+}
+```
+
+Match keys: `directory` (session directory), `title`, `project` (project ID, not display name), `session` (session ID), and `caseSensitive` (default false). Wildcards: `*` matches any sequence, including path separators; `?` matches one Unicode code point. Other characters are literal. No globstar/regex syntax. Use actual absolute paths, not `~` or environment substitutions inside patterns. Disable a rule with `enabled: false`. Settings offers guided rule creation, enable/disable, move earlier/later, duplication, deletion, single-rule JSON, and whole-array JSON. Up to 200 rules. Oversized identity metadata (titles/directories over 4096 UTF-16 units or IDs over 512) protects the tab instead of running unbounded matching.
+
+### Schedule
+
+```json
+{
+  "schedule": { "days": [1, 2, 3, 4, 5], "startHour": 9, "endHour": 18 }
+}
+```
+
+Terminal machine's local time; Sunday is 0. Default: all days, 0–24. End hour is exclusive. Overnight windows such as 22–6 belong to the weekday on which the window starts. Empty days or equal start/end disable cleanup for that schedule. Scheduling applies to manual cleanup too, but not restoration.
+
+### Corral privacy and retention
+
+```json
+{
+  "history": { "maxEntries": 200, "days": 30, "rememberTitles": true }
+}
+```
+
+Durable storage contains preferences, session locks, and bounded recovery metadata (IDs, title if enabled, directory, project ID, original position, timestamps, outcome). It contains **no transcript, drafts, questions, answers, permission details, or credentials**. Titles and paths are private local metadata; turn off `rememberTitles` to omit and scrub stored titles at the next persistence/prune. Entries are capped/expired across all namespaces, not separately per connection.
+
+An `intent` is written **before** closing. Failed persistence prevents closure. Unfinished intents become `uncertain` on reload, never automatically replayed. Explicitly inspect, restore, or forget uncertain entries. The no-retry protection lasts while the uncertain entry is retained; expiry, clearing, or forgetting removes that record. Manual closure outside Wrangler is not added to the durable corral (OpenCode has its own reopen-last-closed behavior).
+
+## Complete automatic-cleanup example
+
+Merge this plugin entry into `cli.json` only after reviewing the shared-tab limitation:
+
+```json
+{
+  "$schema": "https://opencode.ai/v2/cli.json",
+  "plugins": [
+    {
+      "package": "/absolute/path/to/opencode-tab-wrangler",
+      "options": {
+        "mode": "auto",
+        "connectionKey": "local-main",
+        "acknowledgeSharedTabs": true,
+        "idleMinutes": 45,
+        "graceMinutes": 15,
+        "minTabs": 4,
+        "softMaxTabs": 12,
+        "cleanup": "over-limit",
+        "batchSize": 2,
+        "order": "oldest-idle",
+        "history": { "maxEntries": 500, "days": 60 },
+        "rules": [
+          {
+            "name": "Keep important sessions",
+            "match": { "title": "*important*" },
+            "set": { "excluded": true },
+            "stop": true
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+## Development and verification
+
+Linux x64, Bun 1.4.0, OpenCode 2.1.4; OpenTUI 0.6.8 and Solid 1.9.15 for development. Host APIs are isolated in `src/host.ts`; pure policy is in `src/policy.ts`. There is no background polling of all historical sessions or transcript downloads. Refresh is limited to open tabs and descendants, sequentially, with a fresh active-execution read before considering closure.
+
+```sh
+bun install --frozen-lockfile
+bun run check
+bun run test:coverage
+bun run test:live
+bun run test:package
+bun run schema
+bun pm pack
+```
+
+Tests cover policy, configuration precedence, wildcard rules, family aggregation, storage failures, local races, clock/pause/reload grace, uncertain outcomes, restore, UI workflows, and package contracts. The explicit live test verifies real automatic closure, selected/question protection, session preservation, and restoration with disposable sessions and no model prompts. The package test repeats it outside the checkout with production dependencies only. Coverage only describes files exercised by tests; it is not proof of complete host compatibility.
+
+See [`DEVELOPMENT.md`](DEVELOPMENT.md) for the live smoke test, known limits, and release checklist. To disable, remove the CLI plugin entry or set mode `off`; no database cleanup or session deletion is necessary. Removing the entry does not erase the host's stored plugin preferences/history.

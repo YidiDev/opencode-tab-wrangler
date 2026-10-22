@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "mode": { "type": "string", "enum": ["preview", "auto", "off"] },
+    "connectionKey": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "acknowledgeSharedTabs": { "type": "boolean" },
+    "idleMinutes": { "type": "number", "minimum": 0, "maximum": 525600 },
+    "graceMinutes": { "type": "number", "minimum": 0, "maximum": 525600 },
+    "excluded": { "type": "boolean" },
+    "protections": {
+      "type": "object",
+      "properties": {
+        "unreadActivity": { "type": "boolean" },
+        "unreadErrors": { "type": "boolean" },
+        "questions": { "type": "boolean" },
+        "permissions": { "type": "boolean" },
+        "pending": { "type": "boolean" },
+        "attention": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "activity": {
+      "type": "object",
+      "properties": {
+        "selection": { "type": "boolean" },
+        "sessionUpdates": { "type": "boolean" },
+        "backgroundEvents": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "checkSeconds": { "type": "integer", "minimum": 5, "maximum": 3600 },
+    "minTabs": { "type": "integer", "minimum": 0, "maximum": 10000 },
+    "softMaxTabs": {
+      "anyOf": [
+        { "type": "integer", "minimum": 1, "maximum": 10000 },
+        { "type": "null" }
+      ]
+    },
+    "cleanup": { "type": "string", "enum": ["all-idle", "over-limit"] },
+    "order": {
+      "type": "string",
+      "enum": ["oldest-idle", "oldest-opened", "left-to-right", "right-to-left"]
+    },
+    "batchSize": { "type": "integer", "minimum": 1, "maximum": 100 },
+    "batchDelaySeconds": { "type": "integer", "minimum": 0, "maximum": 3600 },
+    "notification": { "type": "string", "enum": ["summary", "silent"] },
+    "history": {
+      "type": "object",
+      "properties": {
+        "maxEntries": { "type": "integer", "minimum": 1, "maximum": 5000 },
+        "days": { "type": "integer", "minimum": 1, "maximum": 3650 },
+        "rememberTitles": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "schedule": {
+      "type": "object",
+      "properties": {
+        "days": {
+          "maxItems": 7,
+          "type": "array",
+          "items": { "type": "integer", "minimum": 0, "maximum": 6 }
+        },
+        "startHour": { "type": "integer", "minimum": 0, "maximum": 23 },
+        "endHour": { "type": "integer", "minimum": 0, "maximum": 24 }
+      },
+      "additionalProperties": false
+    },
+    "rules": {
+      "maxItems": 200,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "enabled": { "default": true, "type": "boolean" },
+          "match": {
+            "type": "object",
+            "properties": {
+              "directory": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "title": { "type": "string", "minLength": 1, "maxLength": 512 },
+              "project": { "type": "string", "minLength": 1, "maxLength": 512 },
+              "session": { "type": "string", "minLength": 1, "maxLength": 512 },
+              "caseSensitive": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          },
+          "set": {
+            "type": "object",
+            "properties": {
+              "idleMinutes": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 525600
+              },
+              "graceMinutes": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 525600
+              },
+              "excluded": { "type": "boolean" },
+              "protections": {
+                "type": "object",
+                "properties": {
+                  "unreadActivity": { "type": "boolean" },
+                  "unreadErrors": { "type": "boolean" },
+                  "questions": { "type": "boolean" },
+                  "permissions": { "type": "boolean" },
+                  "pending": { "type": "boolean" },
+                  "attention": { "type": "boolean" }
+                },
+                "additionalProperties": false
+              },
+              "activity": {
+                "type": "object",
+                "properties": {
+                  "selection": { "type": "boolean" },
+                  "sessionUpdates": { "type": "boolean" },
+                  "backgroundEvents": { "type": "boolean" }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "stop": { "default": false, "type": "boolean" }
+        },
+        "required": ["name", "enabled", "match", "set", "stop"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "title": "OpenCode Tab Wrangler options"
+}
