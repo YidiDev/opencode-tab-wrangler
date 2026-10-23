@@ -99,6 +99,16 @@ export function harness(options: Options = {}, tabs = [tab()]) {
     advance(ms: number) {
       time += ms;
     },
+    age(ms: number) {
+      // Elapse ordinary idle time with periodic observations; advance() deliberately models a gap.
+      const interval = controller.config().checkSeconds * 1000;
+      while (ms > 0) {
+        const step = Math.min(ms, interval);
+        time += step;
+        ms -= step;
+        controller.observe();
+      }
+    },
     now: () => time,
     setTabs(value: Tab[]) {
       current = value;

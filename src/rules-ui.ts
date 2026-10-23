@@ -5,6 +5,7 @@ import type { Controller } from "./controller";
 export async function rulesUI(context: Plugin.Context, controller: Controller) {
   const dialog = context.ui.dialog;
   const rules = controller.config().rules;
+  const scope = controller.scope();
   const selection = await dialog.select({
     title: "Ordered rules · later matches win",
     options: [
@@ -40,7 +41,7 @@ export async function rulesUI(context: Plugin.Context, controller: Controller) {
       }))
     )
       return;
-    await controller.patchPreferences({ rules: next });
+    await controller.patchPreferences({ rules: next }, { scope, rules });
   }
   if (selection === "$json") {
     const input = await dialog.prompt({

@@ -53,6 +53,7 @@ export function createUI(context: Plugin.Context, controller: Controller) {
     }
   }
   async function tabDetails(id: string) {
+    const scope = controller.scope();
     const d = controller.decisions().find((d) => d.tab.id === id);
     if (!d) return;
     const action = await dialog.select({
@@ -99,18 +100,22 @@ export function createUI(context: Plugin.Context, controller: Controller) {
         );
         return;
       }
-      await controller.patchPreferences({
-        rules: [
-          {
-            name: `Exclude ${action}`,
-            enabled: true,
-            match: { [action]: value, caseSensitive: true },
-            set: { excluded: true },
-            stop: true,
-          },
-          ...controller.config().rules,
-        ],
-      });
+      const rules = controller.config().rules;
+      await controller.patchPreferences(
+        {
+          rules: [
+            {
+              name: `Exclude ${action}`,
+              enabled: true,
+              match: { [action]: value, caseSensitive: true },
+              set: { excluded: true },
+              stop: true,
+            },
+            ...rules,
+          ],
+        },
+        { scope, rules },
+      );
     }
   }
   async function tabs() {
@@ -128,6 +133,7 @@ export function createUI(context: Plugin.Context, controller: Controller) {
     if (selected) await tabDetails(selected);
   }
   async function corral() {
+    const scope = controller.scope();
     const history = controller.history();
     const choice = await dialog.select({
       title: "Wrangler · Corral",
@@ -150,8 +156,13 @@ export function createUI(context: Plugin.Context, controller: Controller) {
                 })
               ) {
                 // Undo the most recent removals first: indices were recorded after earlier closes.
-                for (const entry of history)
-                  await controller.restore(entry.id, false);
+                for (const entry of history) {
+                  if (controller.scope() !== scope)
+                    throw new SettingsError(
+                      "Connection changed. Reopen Corral before restoring more tabs.",
+                    );
+                  await controller.restore(entry.id, false, scope);
+                }
               }
             });
           },
@@ -165,11 +176,10 @@ export function createUI(context: Plugin.Context, controller: Controller) {
               if (
                 await dialog.confirm({
                   title: "Clear corral?",
-                  message:
-                    "Forget this connection's entries? Sessions are not deleted.",
+                  message: `Forget entries for ${scope}? Sessions are not deleted.`,
                 })
               )
-                await controller.clearHistory();
+                await controller.clearHistory(scope);
             });
           },
         },
@@ -184,9 +194,13 @@ export function createUI(context: Plugin.Context, controller: Controller) {
         { title: "Forget entry (does not delete session)", value: "forget" },
       ],
     });
-    if (action === "forget") await controller.removeEntry(choice);
+    if (controller.scope() !== scope)
+      throw new SettingsError(
+        "Connection changed. Reopen Corral before acting on its entries.",
+      );
+    if (action === "forget") await controller.forgetEntry(choice, scope);
     if (action === "focus" || action === "background") {
-      if (!(await controller.restore(choice, action === "focus")))
+      if (!(await controller.restore(choice, action === "focus", scope)))
         await alert(
           "Could not confirm restoration. The entry has been kept; the session may be unavailable.",
         );

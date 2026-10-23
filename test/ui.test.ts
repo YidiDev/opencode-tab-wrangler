@@ -71,19 +71,19 @@ test("file controlled settings cannot be changed in dialog", async () => {
 });
 test("cleanup requires confirmation and respects cancellation", async () => {
   const h = uiFixture([], [], [false]);
-  h.advance(61000);
+  h.age(61000);
   await h.ui.cleanup();
   expect(h.closed).toEqual([]);
 });
 test("manual cleanup confirmation invokes safe runner", async () => {
   const h = uiFixture([], [], [true]);
-  h.advance(61000);
+  h.age(61000);
   await h.ui.cleanup();
   expect(h.closed).toEqual(["one"]);
 });
 test("corral reopening works through UI", async () => {
   const h = uiFixture([]);
-  h.advance(61000);
+  h.age(61000);
   await h.controller.run();
   const id = h.state.corral[0].id;
   const context = {
@@ -165,7 +165,7 @@ test("one-click exclusion takes precedence over existing stopping rules", async 
     ],
   });
   await h.ui.tabs();
-  h.advance(61000);
+  h.age(61000);
   expect(h.controller.decisions()[0].reasons).toContain("excluded");
 });
 test("partial file-controlled object allows other child settings", async () => {

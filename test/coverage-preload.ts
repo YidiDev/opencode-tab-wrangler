@@ -1,5 +1,6 @@
 // Import every production module so untested entrypoints cannot disappear from coverage's denominator.
 import "../src/clock";
+import "../src/observation-clock";
 import "../src/config";
 import "../src/controller";
 import "../src/deadline";

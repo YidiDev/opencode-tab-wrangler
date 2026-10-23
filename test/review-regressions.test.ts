@@ -10,7 +10,7 @@ test("confirmation binds cleanup to named IDs even if tabs reorder", async () =>
     tab("a", { index: 0 }),
     tab("b", { index: 1 }),
   ]);
-  h.advance(61000);
+  h.age(61000);
   let shown = "";
   const context = {
     options: {},
@@ -31,7 +31,7 @@ test("confirmation binds cleanup to named IDs even if tabs reorder", async () =>
 });
 test("transient visits during refresh reset idle and grace", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   h.onRefresh(() => {
     h.patch("one", { active: true });
     h.controller.observe(true);
@@ -175,7 +175,7 @@ test("operational status explains preview/setup/pause rather than promising clos
 });
 test("result-write failure after an admitted close retains intent and blocks retry", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   const update = h.controller.dep.update;
   let writes = 0;
   h.controller.dep.update = async (mutation) => {
@@ -187,13 +187,13 @@ test("result-write failure after an admitted close retains intent and blocks ret
   expect(h.state.corral[0].state).toBe("intent");
   h.setTabs([tab()]);
   h.controller.observe();
-  h.advance(61000);
+  h.age(61000);
   await h.controller.run();
   expect(h.closed).toHaveLength(1);
 });
 test("clear history removes only the current namespace", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   await h.controller.run();
   h.state.corral.push({
     ...h.state.corral[0],
@@ -205,7 +205,7 @@ test("clear history removes only the current namespace", async () => {
 });
 test("restore preserves the stored position without moving already-open sessions", async () => {
   const h = harness({}, [tab("a", { index: 3 })]);
-  h.advance(61000);
+  h.age(61000);
   await h.controller.run();
   const moves: unknown[] = [];
   h.host.move = (id, index) => {

@@ -4,7 +4,7 @@ import type { Entry } from "../src/model";
 
 test("manual cleanup records history and never deletes sessions", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   expect(await h.controller.run()).toBe(1);
   expect(h.closed).toEqual(["one"]);
   expect(h.state.corral[0].state).toBe("closed");
@@ -31,13 +31,13 @@ test.each([
   { acknowledgeSharedTabs: false },
 ])("setup gate %j", async (options) => {
   const h = harness(options);
-  h.advance(61000);
+  h.age(61000);
   expect(await h.controller.run()).toBe(0);
   expect(h.closed).toEqual([]);
 });
 test("pause and resume restart grace", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   h.controller.pause(null);
   expect(await h.controller.run()).toBe(0);
   h.controller.resume();
@@ -48,7 +48,7 @@ test("pause and resume restart grace", async () => {
 test("expired pause grants fresh grace on tick", async () => {
   const h = harness({ mode: "auto" });
   h.controller.pause(1);
-  h.advance(61000);
+  h.age(61000);
   await h.controller.tick();
   expect(h.closed).toEqual([]);
 });
@@ -68,7 +68,7 @@ test("clock rollback grants grace", async () => {
 });
 test("freshly selected tab is rechecked after persistence", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   h.onWrite(() => h.patch("one", { active: true }));
   expect(await h.controller.run()).toBe(0);
   expect(h.closed).toEqual([]);
@@ -76,42 +76,42 @@ test("freshly selected tab is rechecked after persistence", async () => {
 });
 test("work starting during persistence prevents close", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   h.onWrite(() => h.patch("one", { running: true, busy: true }));
   expect(await h.controller.run()).toBe(0);
   expect(h.closed).toEqual([]);
 });
 test("background events during persistence prevent close", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   h.onWrite(() => h.controller.touch("one"));
   expect(await h.controller.run()).toBe(0);
   expect(h.closed).toEqual([]);
 });
 test("failed persistence means no closure", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   h.failPersist();
   expect(await h.controller.run()).toBe(0);
   expect(h.closed).toEqual([]);
 });
 test("failed sync protects affected tabs", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   h.failRefresh();
   expect(await h.controller.run()).toBe(0);
   expect(h.closed).toEqual([]);
 });
 test("close returning false leaves no fake successful history", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   h.failClose();
   expect(await h.controller.run()).toBe(0);
   expect(h.state.corral).toEqual([]);
 });
 test("unconfirmed closure is retained as uncertain and never retried automatically", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   h.delayClose();
   expect(await h.controller.run()).toBe(0);
   expect(h.state.corral[0].state).toBe("uncertain");
@@ -120,23 +120,23 @@ test("unconfirmed closure is retained as uncertain and never retried automatical
 });
 test("floor is re-evaluated between closes", async () => {
   const h = harness({ minTabs: 1 }, [tab("a"), tab("b"), tab("c")]);
-  h.advance(61000);
+  h.age(61000);
   expect(await h.controller.run()).toBe(2);
   expect(h.tabs()).toHaveLength(1);
 });
 test("locks and unlock grant grace", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   await h.controller.lock("one", null);
   expect(await h.controller.run()).toBe(0);
   await h.controller.unlock("one");
   expect(await h.controller.run()).toBe(0);
-  h.advance(61000);
+  h.age(61000);
   expect(await h.controller.run()).toBe(1);
 });
 test("reopening receives fresh grace and removes history", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   await h.controller.run();
   const id = h.state.corral[0].id;
   expect(await h.controller.restore(id, false)).toBe(true);
@@ -146,7 +146,7 @@ test("reopening receives fresh grace and removes history", async () => {
 });
 test("unavailable session retains corral entry", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   await h.controller.run();
   h.missing();
   expect(await h.controller.restore(h.state.corral[0].id)).toBe(false);
@@ -154,14 +154,14 @@ test("unavailable session retains corral entry", async () => {
 });
 test("dispose during write prevents external effect", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   h.onWrite(() => h.controller.dispose());
   expect(await h.controller.run()).toBe(0);
   expect(h.closed).toEqual([]);
 });
 test("same-tab reopen by user resets observation", () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   h.setTabs([]);
   h.controller.observe();
   h.setTabs([tab()]);
@@ -178,12 +178,12 @@ test("re-enabling native tabs grants fresh grace instead of catching up closures
   enabled = true;
   h.controller.observe();
   expect(await h.controller.run()).toBe(0);
-  h.advance(61000);
+  h.age(61000);
   expect(await h.controller.run()).toBe(1);
 });
 test("saved preferences validate, preserve file overrides, and reset timers", async () => {
   const h = harness({ idleMinutes: 1 });
-  h.advance(61000);
+  h.age(61000);
   await h.controller.preferences({ idleMinutes: 90, batchSize: 1 });
   expect(h.controller.config().idleMinutes).toBe(1);
   expect(h.controller.config().batchSize).toBe(1);
@@ -207,13 +207,13 @@ test("reconcile intents as uncertain without retry; isolates connection history"
   await h.controller.reconcile();
   expect(h.state.corral[0].state).toBe("uncertain");
   expect(h.controller.history()).toHaveLength(1);
-  h.advance(61000);
+  h.age(61000);
   expect(await h.controller.run()).toBe(0);
   expect(h.closed).toEqual([]);
 });
 test("concurrent runs are serialized", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   await Promise.all([
     h.controller.run(),
     h.controller.run(),
@@ -223,7 +223,7 @@ test("concurrent runs are serialized", async () => {
 });
 test("a competing uncertain intent cannot be bypassed by our own intent", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   let inserted = false;
   h.onWrite(() => {
     if (inserted || !h.state.corral.length) return;
@@ -239,7 +239,7 @@ test("a competing uncertain intent cannot be bypassed by our own intent", async 
 });
 test("slow refresh grants a new grace period", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   h.onRefresh(() => h.advance(120000));
   expect(await h.controller.run()).toBe(0);
   expect(h.closed).toEqual([]);
@@ -261,7 +261,7 @@ test("manual lock and pause durations cannot overflow stored timestamps", async 
 });
 test("history privacy setting scrubs persisted titles immediately", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   await h.controller.run();
   expect(h.state.corral[0].title).toBeDefined();
   await h.controller.preferences({ history: { rememberTitles: false } });

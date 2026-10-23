@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Centralize gap detection across manual cleanup, observations, refreshes, and asynchronous waits; distinguish intentional batch delay from suspension/oversleep.
+- Retain meaningful protection transitions during cleanup without letting private hydration starve eligible tabs.
+- Reject stale rule edits using transactional array/namespace comparisons, including one-click exclusions.
+- Bind Corral clearing, forgetting, and restoration to the opening namespace; preserve recovery records when that context changes.
+
 - Reverify server state after intent persistence; bound storage waits and final verification age. Storage errors/timeouts disable further writes/cleanup until reload, without replaying late writes.
 - Combine conflicting unread evidence conservatively so native activity cannot mask a verified error.
 - Fence candidate activity independently from unrelated busy tabs.

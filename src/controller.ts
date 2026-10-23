@@ -1,4 +1,4 @@
-import { candidates, evaluate, observe } from "./policy";
+import { candidates, evaluate, observe, protectionReasons } from "./policy";
 import {
   inSchedule,
   merge,
@@ -7,12 +7,19 @@ import {
   SettingsError,
   type Config,
   type Options,
+  type Rule,
 } from "./config";
 import type { Decision, Entry, Persisted, Runtime, Tab } from "./model";
 import { keyFor } from "./model";
 import { prune, validateState } from "./state";
 import type { Host } from "./host";
 import { withDeadline } from "./deadline";
+import { ObservationClock } from "./observation-clock";
+
+export interface RuleExpectation {
+  scope: string;
+  rules: readonly Rule[];
+}
 
 export interface Dependencies {
   host: Host;
@@ -35,7 +42,8 @@ export class Controller {
   private layout: string[] = [];
   private lifetime = new AbortController();
   private storageFault = false;
-  private lastFinished: number | undefined;
+  private clock: ObservationClock;
+  private protectedSeen = new Set<string>();
   private lastPreview = -Infinity;
   private lastHousekeeping = -Infinity;
   private resumed = false;
@@ -51,6 +59,7 @@ export class Controller {
   constructor(readonly dep: Dependencies) {
     validateState(dep.state);
     this.config();
+    this.clock = new ObservationClock(dep.now, dep.monotonic);
   }
   config(): Config {
     const key = JSON.stringify([this.dep.state.preferences, this.dep.options]);
@@ -86,6 +95,7 @@ export class Controller {
       throw new SettingsError(
         "Storage is unavailable or uncertain; reload Wrangler and inspect the corral before retrying.",
       );
+    this.checkGap();
     let invalidMutation = false;
     try {
       await withDeadline(
@@ -110,6 +120,30 @@ export class Controller {
           "Storage failed or timed out; cleanup disabled until reload; inspect the corral";
       }
       throw error;
+    } finally {
+      this.checkGap();
+    }
+  }
+  private checkGap() {
+    if (this.disposed) return;
+    const kind = this.clock.check(
+      (this.cachedConfig?.checkSeconds ?? 30) * 2000,
+    );
+    if (kind === "rollback") {
+      this.lastPreview = -Infinity;
+      this.lastBatch = -Infinity;
+      this.lastHousekeeping = -Infinity;
+    }
+    if (kind) this.resetGrace();
+  }
+  private async wait(ms: number) {
+    this.checkGap();
+    const key = this.clock.beginWait(ms);
+    try {
+      await this.dep.sleep(ms);
+    } finally {
+      this.checkGap();
+      this.clock.endWait(key);
     }
   }
   resetGrace() {
@@ -134,6 +168,7 @@ export class Controller {
   }
   observe(fromHost = false) {
     if (this.disposed) return;
+    this.checkGap();
     const enabled = this.dep.host.enabled(),
       config = this.config(),
       now = this.dep.now(),
@@ -146,6 +181,7 @@ export class Controller {
       this.lastTabs.clear();
       this.selected.clear();
       this.activity.clear();
+      this.protectedSeen.clear();
       this.layout = [];
       this.observedScope = scope;
       this.dep.runtime.observations = {};
@@ -180,6 +216,28 @@ export class Controller {
       if (this.selected.has(tab.id) !== tab.active) this.markActivity(tab.id);
     }
     this.selected = selected;
+    // Keep real positive guards even while hydration is suppressed. A missing private snapshot
+    // is not a cleared protection: only a verified negative observation can release the latch.
+    for (const tab of tabs) {
+      const guarded = protectionReasons(
+        tab,
+        config,
+        this.dep.state.locks[keyFor(scope, tab.id)],
+        now,
+      ).some((reason) => reason !== "unknown-state" && reason !== "selected");
+      if (guarded) this.protectedSeen.add(tab.id);
+      else if (tab.known && this.protectedSeen.delete(tab.id)) {
+        const value = this.dep.runtime.observations[keyFor(scope, tab.id)];
+        if (value) {
+          value.touched = now;
+          value.grace = now;
+        }
+        this.markActivity(tab.id);
+      }
+    }
+    const liveIDs = new Set(layout);
+    for (const id of this.protectedSeen)
+      if (!liveIDs.has(id)) this.protectedSeen.delete(id);
     if (fromHost && this.working) return;
     const liveKeys = new Set<string>();
     for (const tab of tabs) {
@@ -256,7 +314,11 @@ export class Controller {
       ? "Preview; automatic closure disabled"
       : "Automatic cleanup enabled";
   }
-  private async savePreferences(value: Options, patch: boolean) {
+  private async savePreferences(
+    value: Options,
+    patch: boolean,
+    expected?: RuleExpectation,
+  ) {
     if (this.disposed) throw new Error("Plugin unloaded");
     resolveConfig(
       patch ? merge(this.dep.state.preferences, value) : value,
@@ -264,6 +326,16 @@ export class Controller {
     );
     await this.write((draft) => {
       if (this.disposed) return;
+      if (expected) {
+        const current = resolveConfig(draft.preferences, this.dep.options);
+        if (
+          current.connectionKey !== expected.scope ||
+          JSON.stringify(current.rules) !== JSON.stringify(expected.rules)
+        )
+          throw new SettingsError(
+            "Rules or connection changed while editing. Reopen Rules and try again; no changes were saved.",
+          );
+      }
       const preferences = patch ? merge(draft.preferences, value) : value;
       const config = resolveConfig(preferences, this.dep.options);
       draft.preferences = structuredClone(preferences);
@@ -274,8 +346,8 @@ export class Controller {
   preferences(value: Options) {
     return this.savePreferences(value, false);
   }
-  patchPreferences(value: Options) {
-    return this.savePreferences(value, true);
+  patchPreferences(value: Options, expected?: RuleExpectation) {
+    return this.savePreferences(value, true, expected);
   }
   async lock(id: string, minutes: number | null) {
     if (this.disposed) throw new Error("Plugin unloaded");
@@ -338,19 +410,9 @@ export class Controller {
   }
   async tick() {
     if (this.disposed || this.working || this.storageFault) return;
+    this.checkGap();
     const now = this.dep.now(),
       config = this.config();
-    if (this.lastFinished !== undefined && now < this.lastFinished) {
-      this.lastPreview = -Infinity;
-      this.lastBatch = -Infinity;
-      this.lastHousekeeping = -Infinity;
-    }
-    if (
-      this.lastFinished !== undefined &&
-      (now < this.lastFinished ||
-        now - this.lastFinished > config.checkSeconds * 2000)
-    )
-      this.resetGrace();
     if (this.paused()) this.resumed = false;
     else if (!this.resumed) {
       this.resumed = true;
@@ -372,11 +434,11 @@ export class Controller {
         this.lastPreview = this.dep.now();
       }
     } finally {
-      this.lastFinished = this.dep.now();
+      this.checkGap();
     }
   }
   private async refreshRoots(ids: string[], config: Config) {
-    const started = this.dep.now();
+    this.checkGap();
     const options = {
       timeoutMs: config.refreshTimeoutSeconds * 1000,
       concurrency: config.refreshConcurrency,
@@ -399,11 +461,7 @@ export class Controller {
       }
     }
     if (this.disposed) return;
-    if (
-      this.dep.now() < started ||
-      this.dep.now() - started > config.checkSeconds * 2000
-    )
-      this.resetGrace();
+    this.checkGap();
     const unknown = this.dep.host.list().filter((t) => !t.known).length;
     if (!this.storageFault)
       this.health =
@@ -414,6 +472,7 @@ export class Controller {
   }
   async run(auto = false, confirmedIDs?: readonly string[]): Promise<number> {
     if (this.working || this.disposed || !this.dep.host.enabled()) return 0;
+    this.checkGap();
     this.working = true;
     let closed = 0;
     try {
@@ -436,7 +495,7 @@ export class Controller {
       for (const decision of selected) {
         if (!this.allowed(auto)) break;
         if (closed && this.config().batchDelaySeconds)
-          await this.dep.sleep(this.config().batchDelaySeconds * 1000);
+          await this.wait(this.config().batchDelaySeconds * 1000);
         if (!this.allowed(auto)) break;
         const id = decision.tab.id;
         try {
@@ -544,11 +603,13 @@ export class Controller {
       return closed;
     } finally {
       this.working = false;
+      this.checkGap();
       if (!this.disposed) this.dep.changed();
     }
   }
   async refresh() {
     if (this.working || this.disposed || !this.dep.host.enabled()) return;
+    this.checkGap();
     this.working = true;
     try {
       await this.refreshRoots(
@@ -557,13 +618,14 @@ export class Controller {
       );
     } finally {
       this.working = false;
+      this.checkGap();
     }
   }
   private async waitFor(test: () => boolean): Promise<boolean> {
     for (let i = 0; i < 40; i++) {
       if (this.disposed) return false;
       if (test()) return true;
-      await this.dep.sleep(50);
+      await this.wait(50);
     }
     return !this.disposed && test();
   }
@@ -577,14 +639,34 @@ export class Controller {
     });
     this.changed();
   }
-  async clearHistory() {
+  private async editHistory(
+    scope: string,
+    mutation: (draft: Persisted) => void,
+  ) {
     if (this.disposed) return;
-    const scope = this.scope();
     await this.write((draft) => {
-      if (!this.disposed)
-        draft.corral = draft.corral.filter((e) => e.scope !== scope);
+      if (
+        resolveConfig(draft.preferences, this.dep.options).connectionKey !==
+        scope
+      )
+        throw new SettingsError(
+          "Connection changed. Reopen Corral; no entries were removed.",
+        );
+      if (!this.disposed) mutation(draft);
     });
     this.changed();
+  }
+  clearHistory(scope = this.scope()) {
+    return this.editHistory(scope, (draft) => {
+      draft.corral = draft.corral.filter((e) => e.scope !== scope);
+    });
+  }
+  forgetEntry(id: string, scope: string) {
+    return this.editHistory(scope, (draft) => {
+      draft.corral = draft.corral.filter(
+        (e) => e.id !== id || e.scope !== scope,
+      );
+    });
   }
   history(): Entry[] {
     const config = this.config();
@@ -616,10 +698,14 @@ export class Controller {
         if (lock.until !== null && lock.until <= now) delete draft.locks[key];
     });
   }
-  async restore(id: string, focus = true): Promise<boolean> {
+  async restore(
+    id: string,
+    focus = true,
+    scope = this.scope(),
+  ): Promise<boolean> {
+    if (this.scope() !== scope) return false;
     const entry = this.history().find((e) => e.id === id);
     if (!entry || this.disposed || !this.dep.host.enabled()) return false;
-    const scope = this.scope();
     try {
       if (
         !(await this.dep.host.exists(entry.sessionID)) ||

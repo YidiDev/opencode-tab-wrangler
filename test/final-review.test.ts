@@ -9,7 +9,7 @@ test("activity and metadata changes in another tab cannot starve eligible cleanu
     tab("idle"),
     tab("busy", { index: 1, running: true }),
   ]);
-  h.advance(61000);
+  h.age(61000);
   h.onWrite(() => {
     h.controller.touch("busy");
     h.patch("busy", { updated: h.now() });
@@ -29,7 +29,7 @@ test("candidate activity during post-intent verification prevents closure even w
 });
 test("server state is reverified after a slow intent write", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   let persisted = false,
     afterWriteReads = 0;
   h.onWrite(() => {
@@ -48,7 +48,7 @@ test("server state is reverified after a slow intent write", async () => {
 });
 test("post-intent verification that exceeds the freshness window cannot close", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   let calls = 0;
   h.onRefresh(() => {
     if (++calls === 3) h.advance(6000);
@@ -67,7 +67,7 @@ test("clock rollback during post-intent verification cannot close", async () => 
 });
 test("monotonic verification age protects even if wall time does not advance", async () => {
   const h = harness();
-  h.advance(61000);
+  h.age(61000);
   let mono = 0,
     calls = 0;
   h.controller.dep.monotonic = () => mono;
@@ -79,7 +79,7 @@ test("monotonic verification age protects even if wall time does not advance", a
 });
 test("a stalled write disables cleanup and a late callback cannot mutate recovery state", async () => {
   const h = harness({ storageTimeoutSeconds: 1 });
-  h.advance(61000);
+  h.age(61000);
   let callback: ((draft: typeof h.state) => void) | undefined;
   h.controller.dep.update = (fn) => {
     callback = fn;
@@ -94,7 +94,7 @@ test("a stalled write disables cleanup and a late callback cannot mutate recover
 });
 test("a late persisted intent never admits a close after a write timeout", async () => {
   const h = harness({ storageTimeoutSeconds: 1 });
-  h.advance(61000);
+  h.age(61000);
   let finish: (() => void) | undefined;
   h.controller.dep.update = async (fn) => {
     const draft = structuredClone(h.state);
@@ -133,7 +133,7 @@ test("restore-all undoes left-to-right and right-to-left removals in inverse ord
       );
       tabs.splice(Math.min(index, tabs.length), 0, item);
     };
-    h.advance(61000);
+    h.age(61000);
     await h.controller.run();
     let done: (() => void) | undefined;
     const completed = new Promise<void>((resolve) => {

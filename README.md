@@ -81,6 +81,8 @@ The Corral's footer actions are **Ctrl+R** (restore all, with confirmation) and 
 
 Restore all undoes the latest removals first, preserving the order of an unchanged batch. User reordering, expired/forgotten entries, and competing terminals can prevent reconstruction of an earlier layout.
 
+Corral actions are bound to the namespace displayed when the dialog opened. Clearing or forgetting entries validates that namespace inside the storage transaction; a changed connection requires reopening Corral rather than acting on another namespace's recovery records.
+
 ## Configuration
 
 All properties below live inside the plugin's `options` object. The generated [`schema.json`](schema.json) describes those options, not the entire `cli.json` file.
@@ -88,6 +90,8 @@ All properties below live inside the plugin's `options` object. The generated [`
 Precedence: **defaults → saved UI preferences → explicit file options**. Nested objects merge; arrays replace. File-controlled fields are read-only in the UI. A partial file-controlled object still allows editing its other fields. Changes grant a fresh grace period. Reset UI preferences by editing **all UI preferences as JSON** to `{}`; this doesn't remove file overrides, locks, or history.
 
 Each layer is validated independently, so an invalid saved value cannot hide behind a valid file override. Ordinary UI edits patch the latest durable preferences transactionally, preserving unrelated concurrent edits. Editing all preferences as JSON intentionally replaces them.
+
+Rule edits additionally compare the opening rules and connection namespace against the latest transaction state. If another terminal changed either, the edit is rejected without overwriting it; reopen Rules and retry. This also applies to one-click exclusions.
 
 Invalid settings, unsupported state versions, or recovery-storage failures disable the plugin without closing tabs. Unknown setting names are rejected, not ignored. There is no arbitrary code/regex policy execution.
 
@@ -168,6 +172,8 @@ The closure deadline is the **later** of last activity + idle interval and last 
 Startup, reload, reopening, resume, re-enabling native tabs, observation gaps, clock rollback, and configuration changes grant fresh grace. Time spent while the plugin is absent is not counted. A restored tab cannot immediately disappear into an auto-close loop. Pause is local to a TUI, survives plugin reload, and ends when that TUI exits.
 
 Selection activity is recorded even while refresh is in progress. Deliberate batch waits are not mistaken for machine sleep. Runtime observations are bounded to currently open tabs; memory checkpoints are coalesced and flushed on orderly plugin unload.
+
+Gap detection runs for manual cleanup and observation/refresh paths as well as scheduled ticks. Intentional waits permit their configured duration, but oversleep or clock rollback grants fresh grace before further closures. Meaningful running/waiting/unread protection transitions are remembered during cleanup even when optional activity sources are off; private verification hydration alone is not treated as new activity.
 
 ### Ordered project/title rules
 

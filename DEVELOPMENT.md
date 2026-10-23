@@ -10,6 +10,7 @@
 - `ui.ts`: built-in searchable dialogs, toggles, JSON editing, confirmation and recovery workflows.
 - `tui.tsx`: host lifecycle, commands, subscriptions, scheduler, cleanup.
 - `clock.ts`: cancellable sleeps; unloading disarms pending batch/verification timers.
+- `observation-clock.ts`: wall/monotonic gap detection and explicit intentional-wait allowances, shared by all controller entrypoints.
 - `rules-ui.ts`: guided ordered-rule creation and editing.
 
 No internal host renderable traversal, filesystem access, monkey patches, or server plugin. Import host types with `import type`; only the entrypoint imports the runtime `Plugin` helper. The terminal's own Solid/OpenTUI runtime owns UI execution.
@@ -49,6 +50,8 @@ These were reviewed at tag `v2.1.4`, not inferred from moving `dev`. Draft stora
 ## State evolution
 
 State version 1 stores preferences, locks keyed by `[connectionKey, sessionID]`, and corral entries. Future migrations must be explicit and tested; unknown versions currently disable the plugin without overwriting state. Recovery never automatically repeats an ambiguous close.
+
+UI rule mutations carry the opening effective array and namespace for transactional optimistic comparison. Corral clearing/forgetting also validates the opening namespace inside the write transaction. Known validation conflicts do not latch storage-fault mode. In tests, `h.age(ms)` models elapsed idle time with periodic observations; `h.advance(ms)` deliberately advances the clock without observation and is appropriate for gap, suspension, and rollback cases. Race tests must assert that their target phase was reached, rather than passing because startup/gap grace prevented execution entirely.
 
 ## Remaining compatibility evidence
 
