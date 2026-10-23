@@ -50,6 +50,8 @@ export const configSchema = z.strictObject({
   checkSeconds: z.number().int().min(5).max(3600),
   refreshTimeoutSeconds: z.number().int().min(1).max(120),
   refreshConcurrency: z.number().int().min(1).max(8),
+  storageTimeoutSeconds: z.number().int().min(1).max(120),
+  verificationMaxAgeSeconds: z.number().int().min(1).max(120),
   previewRefreshSeconds: z.number().int().min(30).max(3600),
   minTabs: z.number().int().min(0).max(10000),
   softMaxTabs: z.number().int().min(1).max(10000).nullable(),
@@ -103,6 +105,8 @@ export const defaults: Config = {
   checkSeconds: 30,
   refreshTimeoutSeconds: 15,
   refreshConcurrency: 3,
+  storageTimeoutSeconds: 10,
+  verificationMaxAgeSeconds: 5,
   previewRefreshSeconds: 300,
   minTabs: 5,
   softMaxTabs: null,
@@ -146,7 +150,12 @@ export function resolveConfig(
     throw new SettingsError(
       "Choose softMaxTabs before enabling over-limit cleanup",
     );
-  return config;
+  return freeze(config);
+}
+function freeze<T extends object>(value: T): T {
+  for (const item of Object.values(value))
+    if (typeof item === "object" && item !== null) freeze(item);
+  return Object.freeze(value);
 }
 export class SettingsError extends Error {}
 export function fileControls(options: Options, path: string): boolean {
@@ -158,7 +167,15 @@ export function fileControls(options: Options, path: string): boolean {
   return true;
 }
 
-// Linear-space wildcard matcher. Only * and ? have special meaning; no regex or code execution.
+interface CompiledGlob {
+  stars: bigint;
+  questions: bigint;
+  literals: Map<string, bigint>;
+  end: bigint;
+}
+const globCache = new Map<string, CompiledGlob>();
+const globResults = new Map<string, boolean>();
+// Bit-parallel wildcard NFA: bounded masks, no backtracking or pattern/input matrix allocation.
 export function glob(
   pattern: string,
   value: string,
@@ -168,24 +185,44 @@ export function glob(
     pattern = pattern.toLowerCase();
     value = value.toLowerCase();
   }
-  const chars = [...value];
-  let previous = new Uint8Array(chars.length + 1);
-  previous[0] = 1;
-  for (const char of pattern) {
-    const next = new Uint8Array(chars.length + 1);
-    if (char === "*") next[0] = previous[0];
-    for (let i = 1; i <= chars.length; i++)
-      next[i] =
-        char === "*"
-          ? Number(Boolean(previous[i] || next[i - 1]))
-          : Number(
-              Boolean(
-                previous[i - 1] && (char === "?" || char === chars[i - 1]),
-              ),
-            );
-    previous = next;
+  pattern = pattern.replace(/\*+/g, "*");
+  if (!/[?*]/.test(pattern)) return pattern === value;
+  if (pattern === "*") return true;
+  const resultKey = `${pattern.length}:${pattern}${value}`;
+  const remembered = globResults.get(resultKey);
+  if (remembered !== undefined) return remembered;
+  const remember = (result: boolean) => {
+    if (globResults.size >= 512)
+      globResults.delete(globResults.keys().next().value!);
+    globResults.set(resultKey, result);
+    return result;
+  };
+  let compiled = globCache.get(pattern);
+  if (!compiled) {
+    compiled = { stars: 0n, questions: 0n, literals: new Map(), end: 1n };
+    for (const char of pattern) {
+      const bit = compiled.end;
+      if (char === "*") compiled.stars |= bit;
+      else if (char === "?") compiled.questions |= bit;
+      else
+        compiled.literals.set(char, (compiled.literals.get(char) ?? 0n) | bit);
+      compiled.end <<= 1n;
+    }
+    if (globCache.size >= 512) globCache.delete(globCache.keys().next().value!);
+    globCache.set(pattern, compiled);
   }
-  return Boolean(previous[chars.length]);
+  const closure = (bits: bigint) => bits | ((bits & compiled.stars) << 1n);
+  let current = closure(1n);
+  for (const char of value) {
+    current = closure(
+      (current & compiled.stars) |
+        ((current &
+          (compiled.questions | (compiled.literals.get(char) ?? 0n))) <<
+          1n),
+    );
+    if (current === 0n) return remember(false);
+  }
+  return remember((current & compiled.end) !== 0n);
 }
 export type Identity = {
   id: string;
@@ -214,10 +251,22 @@ export function matches(rule: Rule["match"], tab: Identity): boolean {
     return pattern === undefined || glob(pattern, value, rule.caseSensitive);
   });
 }
+const policyCache = new WeakMap<
+  Config,
+  Map<string, { policy: Policy; rules: string[] }>
+>();
 export function policyFor(
   config: Config,
   tab: Identity,
 ): { policy: Policy; rules: string[] } {
+  let cache = policyCache.get(config);
+  if (!cache) {
+    cache = new Map();
+    policyCache.set(config, cache);
+  }
+  const key = JSON.stringify([tab.id, tab.title, tab.directory, tab.project]);
+  const cached = cache.get(key);
+  if (cached) return cached;
   let result: Options = {
     idleMinutes: config.idleMinutes,
     graceMinutes: config.graceMinutes,
@@ -232,7 +281,11 @@ export function policyFor(
     rules.push(rule.name);
     if (rule.stop) break;
   }
-  return { policy: policy.parse(result), rules };
+  const value = freeze({ policy: policy.parse(result), rules });
+  // Bounded per immutable configuration snapshot; old snapshots are weakly held.
+  if (cache.size >= 512) cache.delete(cache.keys().next().value!);
+  cache.set(key, value);
+  return value;
 }
 export function inSchedule(config: Config, now: number): boolean {
   const date = new Date(now),

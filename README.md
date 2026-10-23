@@ -79,6 +79,8 @@ Open-tab details offer permanent locks, temporary snoozes, unlock, focus, and on
 
 The Corral's footer actions are **Ctrl+R** (restore all, with confirmation) and **Ctrl+X** (clear this connection's history, with confirmation). Restore one entry in the background or focus it. Already-open tabs aren't duplicated or moved. Unavailable sessions retain their history entry. Forgetting an entry never deletes a session.
 
+Restore all undoes the latest removals first, preserving the order of an unchanged batch. User reordering, expired/forgotten entries, and competing terminals can prevent reconstruction of an earlier layout.
+
 ## Configuration
 
 All properties below live inside the plugin's `options` object. The generated [`schema.json`](schema.json) describes those options, not the entire `cli.json` file.
@@ -112,13 +114,17 @@ For `over-limit`, `softMaxTabs` is required and must be at least `minTabs`. In `
 
 Refresh controls:
 
-| Option                  | Default | Meaning                                                                                           |
-| ----------------------- | ------- | ------------------------------------------------------------------------------------------------- |
-| `refreshTimeoutSeconds` | `15`    | Entire refresh-pass deadline, 1–120 seconds; individual roots receive a bounded share             |
-| `refreshConcurrency`    | `3`     | Concurrent root families, 1–8; descendants remain bounded to 256                                  |
-| `previewRefreshSeconds` | `300`   | Background preview refresh interval, 30–3600 seconds; opening the inspector refreshes immediately |
+| Option                      | Default | Meaning                                                                                                                     |
+| --------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `refreshTimeoutSeconds`     | `15`    | Entire refresh-pass deadline, 1–120 seconds; individual roots receive a bounded share                                       |
+| `storageTimeoutSeconds`     | `10`    | Maximum wait for any durable state update, 1–120 seconds; failures/timeouts disable further writes and cleanup until reload |
+| `verificationMaxAgeSeconds` | `5`     | Maximum final verification window, 1–120 seconds, measured after intent persistence and checked immediately before closing  |
+| `refreshConcurrency`        | `3`     | Concurrent root families, 1–8; descendants remain bounded to 256                                                            |
+| `previewRefreshSeconds`     | `300`   | Background preview refresh interval, 30–3600 seconds; opening the inspector refreshes immediately                           |
 
 Failed, timed-out, and unvisited roots remain unknown/protected. Completed roots can remain usable when another root stalls. Bulk passes rotate their starting point to avoid starvation. Each actual candidate receives its own fresh read, including a fresh active-execution snapshot, before intent persistence and the final local recheck. Shared OpenCode caches are not invalidated by Wrangler.
+
+Candidates are reverified **again after** intent persistence. Slow or failed final verification never authorizes a close. The final window includes the verification request and local decision work, not just time since a response. Candidate-specific activity fences prevent a busy unrelated tab from repeatedly cancelling quiet-tab cleanup; layout/configuration changes remain conservative global fences.
 
 ### Independent protections
 
@@ -218,6 +224,8 @@ Durable storage contains preferences, session locks, and bounded recovery metada
 
 An `intent` is written **before** closing. Failed persistence prevents closure. Unfinished intents become `uncertain` on reload, never automatically replayed. Explicitly inspect, restore, or forget uncertain entries. The no-retry protection lasts while the uncertain entry is retained; expiry, clearing, or forgetting removes that record. Manual closure outside Wrangler is not added to the durable corral (OpenCode has its own reopen-last-closed behavior).
 
+A storage failure or timeout stops further writes/cleanup in that plugin instance. A timeout does **not** prove that an admitted disk operation was cancelled: it may commit late. Late callbacks cannot authorize a close; an already-admitted late write may leave an intent to inspect after recovery. Resolve storage availability, reload, and inspect the corral before resuming. No automatic retry is made. Restoration remains available, but forgetting the restored entry can fail while storage is unavailable.
+
 Housekeeping physically prunes expired durable entries and expired locks on the next available scheduler check (at most once per minute under frequent checks). It also runs while paused or off. Logical history reads hide expired entries immediately; the plugin does not promise deletion while OpenCode is stopped or storage is unavailable. Permanent locks intentionally persist until explicitly unlocked.
 
 ## Complete automatic-cleanup example
@@ -271,6 +279,8 @@ bun pm pack
 ```
 
 Tests cover policy, configuration precedence, wildcard rules, family aggregation, storage failures, local races, clock/pause/reload grace, uncertain outcomes, restore, UI workflows, and package contracts. The explicit live test verifies real automatic closure, selected/question protection, session preservation, and restoration with disposable sessions and no model prompts. The package test repeats it outside the checkout with production dependencies only. Coverage only describes files exercised by tests; it is not proof of complete host compatibility.
+
+Additional regressions cover conflicting native/server unread indicators (positive error evidence wins), slow/late storage outcomes, post-persistence verification, unrelated-tab activity, inverse-order batch recovery, and bounded wildcard/cache churn. The live test also checks pending permission protection and that parked synthetic context does not prevent cleanup. Wildcards use bit-parallel matching with bounded caches; configuration and cached policies are immutable.
 
 CI runs installed-package/live tests, TypeScript and Python linting, schema parity, dependency/credential checks, and full-production-module coverage accounting. Coverage floors are 80% lines/75% functions per production file and 85% aggregate; tests/helpers are not part of the custom production denominator. Property and race tests supplement coverage, not the reverse. CodeQL runs when public-repository entitlement is available; it is skipped while this repository is private.
 

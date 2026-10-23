@@ -12,6 +12,7 @@ import type { Decision, Entry, Persisted, Runtime, Tab } from "./model";
 import { keyFor } from "./model";
 import { prune, validateState } from "./state";
 import type { Host } from "./host";
+import { withDeadline } from "./deadline";
 
 export interface Dependencies {
   host: Host;
@@ -20,6 +21,7 @@ export interface Dependencies {
   runtime: Runtime;
   update(mutation: (draft: Persisted) => void): Promise<void>;
   now(): number;
+  monotonic?(): number;
   sleep(ms: number): Promise<void>;
   notify(message: string): void;
   changed(): void;
@@ -29,6 +31,10 @@ export class Controller {
   private disposed = false;
   private working = false;
   private revision = 0;
+  private activity = new Map<string, symbol>();
+  private layout: string[] = [];
+  private lifetime = new AbortController();
+  private storageFault = false;
   private lastFinished: number | undefined;
   private lastPreview = -Infinity;
   private lastHousekeeping = -Infinity;
@@ -71,6 +77,41 @@ export class Controller {
     this.revision++;
     if (!this.disposed) this.dep.changed();
   }
+  private markActivity(id: string) {
+    this.activity.set(id, Symbol());
+    if (!this.disposed) this.dep.changed();
+  }
+  private async write(mutation: (draft: Persisted) => void) {
+    if (this.disposed || this.storageFault)
+      throw new SettingsError(
+        "Storage is unavailable or uncertain; reload Wrangler and inspect the corral before retrying.",
+      );
+    let invalidMutation = false;
+    try {
+      await withDeadline(
+        async (signal) => {
+          await this.dep.update((draft) => {
+            if (signal.aborted || this.disposed || this.storageFault) return;
+            try {
+              mutation(draft);
+            } catch (error) {
+              invalidMutation = true;
+              throw error;
+            }
+          });
+        },
+        this.config().storageTimeoutSeconds * 1000,
+        this.lifetime.signal,
+      );
+    } catch (error) {
+      if (!invalidMutation && !this.disposed) {
+        this.storageFault = true;
+        this.health =
+          "Storage failed or timed out; cleanup disabled until reload; inspect the corral";
+      }
+      throw error;
+    }
+  }
   resetGrace() {
     if (this.disposed) return;
     const now = this.dep.now();
@@ -89,7 +130,7 @@ export class Controller {
     const value =
       this.dep.runtime.observations[keyFor(config.connectionKey, id)];
     if (value) value.touched = this.dep.now();
-    this.changed();
+    this.markActivity(id);
   }
   observe(fromHost = false) {
     if (this.disposed) return;
@@ -104,11 +145,27 @@ export class Controller {
     if (this.observedScope !== scope) {
       this.lastTabs.clear();
       this.selected.clear();
+      this.activity.clear();
+      this.layout = [];
       this.observedScope = scope;
       this.dep.runtime.observations = {};
       this.changed();
     }
     const tabs = this.dep.host.list();
+    const layout = tabs.map((t) => t.id);
+    if (JSON.stringify(layout) !== JSON.stringify(this.layout)) {
+      for (const id of new Set([...layout, ...this.layout]))
+        if (layout.includes(id) !== this.layout.includes(id)) {
+          const value = this.dep.runtime.observations[keyFor(scope, id)];
+          if (value) {
+            value.touched = now;
+            value.grace = now;
+          }
+          this.markActivity(id);
+        }
+      this.revision++;
+      this.layout = layout;
+    }
     // User selection is never suppressed by an in-flight refresh. Only hydration/policy observation is.
     const selected = new Set(tabs.filter((t) => t.active).map((t) => t.id));
     for (const tab of tabs) {
@@ -120,15 +177,21 @@ export class Controller {
         value.touched = now;
         value.grace = now;
       }
+      if (this.selected.has(tab.id) !== tab.active) this.markActivity(tab.id);
     }
-    if (JSON.stringify([...selected]) !== JSON.stringify([...this.selected]))
-      this.changed();
     this.selected = selected;
     if (fromHost && this.working) return;
     const liveKeys = new Set<string>();
     for (const tab of tabs) {
       const key = keyFor(scope, tab.id);
       liveKeys.add(key);
+      const previous = this.dep.runtime.observations[key];
+      if (
+        previous &&
+        tab.updated > previous.updated &&
+        policyFor(config, tab).policy.activity.sessionUpdates
+      )
+        this.markActivity(tab.id);
       this.dep.runtime.observations[key] = observe(
         tab,
         config,
@@ -141,8 +204,8 @@ export class Controller {
     }
     for (const key of Object.keys(this.dep.runtime.observations))
       if (!liveKeys.has(key)) delete this.dep.runtime.observations[key];
-    if (JSON.stringify([...this.lastTabs.values()]) !== JSON.stringify(tabs))
-      this.revision++;
+    for (const id of this.activity.keys())
+      if (!layout.includes(id)) this.activity.delete(id);
     this.lastTabs = new Map(tabs.map((t) => [t.id, t]));
     this.dep.changed();
   }
@@ -181,6 +244,8 @@ export class Controller {
   }
   status(): string {
     const c = this.config();
+    if (this.storageFault)
+      return "Storage outcome uncertain; cleanup disabled until reload";
     if (!this.dep.host.enabled()) return "Native tabs are disabled";
     if (c.mode === "off") return "Off";
     if (this.paused()) return "Paused; no tabs will close";
@@ -197,11 +262,11 @@ export class Controller {
       patch ? merge(this.dep.state.preferences, value) : value,
       this.dep.options,
     );
-    await this.dep.update((draft) => {
+    await this.write((draft) => {
       if (this.disposed) return;
       const preferences = patch ? merge(draft.preferences, value) : value;
       const config = resolveConfig(preferences, this.dep.options);
-      draft.preferences = preferences;
+      draft.preferences = structuredClone(preferences);
       draft.corral = prune(draft.corral, config, this.dep.now());
     });
     this.resetGrace();
@@ -217,7 +282,7 @@ export class Controller {
     this.validateDuration(minutes);
     const key = this.lockKey(id),
       now = this.dep.now();
-    await this.dep.update((draft) => {
+    await this.write((draft) => {
       if (!this.disposed)
         draft.locks[key] = {
           until: minutes === null ? null : now + minutes * 60000,
@@ -228,7 +293,7 @@ export class Controller {
   async unlock(id: string) {
     if (this.disposed) throw new Error("Plugin unloaded");
     const key = this.lockKey(id);
-    await this.dep.update((draft) => {
+    await this.write((draft) => {
       if (!this.disposed) delete draft.locks[key];
     });
     this.resetGrace();
@@ -261,6 +326,7 @@ export class Controller {
     const c = this.config();
     return (
       !this.disposed &&
+      !this.storageFault &&
       this.dep.host.enabled() &&
       !this.paused() &&
       c.mode !== "off" &&
@@ -271,7 +337,7 @@ export class Controller {
     );
   }
   async tick() {
-    if (this.disposed || this.working) return;
+    if (this.disposed || this.working || this.storageFault) return;
     const now = this.dep.now(),
       config = this.config();
     if (this.lastFinished !== undefined && now < this.lastFinished) {
@@ -339,10 +405,11 @@ export class Controller {
     )
       this.resetGrace();
     const unknown = this.dep.host.list().filter((t) => !t.known).length;
-    this.health =
-      failed || unknown
-        ? "Some session state is unavailable; affected tabs are protected"
-        : "Session state verified; shared-terminal limitations still apply";
+    if (!this.storageFault)
+      this.health =
+        failed || unknown
+          ? "Some session state is unavailable; affected tabs are protected"
+          : "Session state verified; shared-terminal limitations still apply";
     this.observe();
   }
   async run(auto = false, confirmedIDs?: readonly string[]): Promise<number> {
@@ -381,7 +448,8 @@ export class Controller {
         const current = this.dep.host.list().find((t) => t.id === id);
         if (!current) continue;
         const scope = this.scope(),
-          revision = this.revision;
+          revision = this.revision,
+          activity = this.activity.get(id);
         const entry: Entry = {
           id: crypto.randomUUID(),
           scope,
@@ -396,7 +464,7 @@ export class Controller {
           state: "intent",
           reason: auto ? "automatic-idle" : "manual-idle",
         };
-        await this.dep.update((draft) => {
+        await this.write((draft) => {
           if (!this.disposed)
             draft.corral = prune(
               [entry, ...draft.corral],
@@ -404,18 +472,41 @@ export class Controller {
               this.dep.now(),
             );
         });
+        // Persistence can stall or outlive the last network read. Reverify AFTER it settles.
+        if (!this.allowed(auto) || this.scope() !== scope) {
+          await this.removeEntry(entry.id, scope);
+          continue;
+        }
+        const verifiedAt = this.dep.now(),
+          verifiedMono = this.dep.monotonic?.() ?? verifiedAt;
+        await this.refreshRoots([id], this.config());
         // Bind manual consent to explicit IDs, and never await between the final check and the close.
         this.observe();
         if (
           !this.allowed(auto) ||
           this.scope() !== scope ||
           revision !== this.revision ||
+          activity !== this.activity.get(id) ||
           !this.dep.state.corral.some(
             (e) => e.id === entry.id && e.state === "intent",
           ) ||
           !candidates(this.decisions(entry.id), this.config()).some(
             (d) => d.tab.id === id,
-          )
+          ) ||
+          !this.dep.host
+            .list()
+            .some(
+              (t) =>
+                t.id === id &&
+                t.title === current.title &&
+                t.directory === current.directory &&
+                t.project === current.project,
+            ) ||
+          this.dep.now() < verifiedAt ||
+          this.dep.now() - verifiedAt >
+            this.config().verificationMaxAgeSeconds * 1000 ||
+          (this.dep.monotonic?.() ?? this.dep.now()) - verifiedMono >
+            this.config().verificationMaxAgeSeconds * 1000
         ) {
           await this.removeEntry(entry.id, scope);
           continue;
@@ -427,7 +518,7 @@ export class Controller {
         const outcome = await this.waitFor(
           () => !this.dep.host.list().some((t) => t.id === id),
         );
-        await this.dep.update((draft) => {
+        await this.write((draft) => {
           const stored = draft.corral.find((e) => e.id === entry.id);
           if (stored)
             stored.state = outcome && !this.disposed ? "closed" : "uncertain";
@@ -447,8 +538,9 @@ export class Controller {
         );
       return closed;
     } catch {
-      this.health =
-        "Cleanup stopped after an error; inspect the corral before retrying";
+      if (!this.storageFault)
+        this.health =
+          "Cleanup stopped after an error; inspect the corral before retrying";
       return closed;
     } finally {
       this.working = false;
@@ -477,7 +569,7 @@ export class Controller {
   }
   async removeEntry(id: string, scope = this.scope()) {
     if (this.disposed) return;
-    await this.dep.update((draft) => {
+    await this.write((draft) => {
       if (!this.disposed)
         draft.corral = draft.corral.filter(
           (e) => e.id !== id || e.scope !== scope,
@@ -488,7 +580,7 @@ export class Controller {
   async clearHistory() {
     if (this.disposed) return;
     const scope = this.scope();
-    await this.dep.update((draft) => {
+    await this.write((draft) => {
       if (!this.disposed)
         draft.corral = draft.corral.filter((e) => e.scope !== scope);
     });
@@ -514,7 +606,7 @@ export class Controller {
       (e) => e.scope === config.connectionKey && e.state === "intent",
     );
     if (!force && !needsPrune && !hasExpired && !hasIntent) return;
-    await this.dep.update((draft) => {
+    await this.write((draft) => {
       if (this.disposed) return;
       for (const entry of draft.corral)
         if (entry.scope === config.connectionKey && entry.state === "intent")
@@ -550,6 +642,11 @@ export class Controller {
       if (!wasOpen) this.dep.host.move(entry.sessionID, entry.index);
       this.observe();
       this.resetGrace();
+      if (this.storageFault) {
+        this.health =
+          "Session reopened; corral entry retained because storage is unavailable";
+        return true;
+      }
       await this.removeEntry(id, scope);
       return true;
     } catch {
@@ -560,6 +657,7 @@ export class Controller {
   }
   dispose() {
     this.disposed = true;
+    this.lifetime.abort();
     this.dep.host.dispose?.();
     this.changed();
   }

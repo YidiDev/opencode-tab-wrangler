@@ -149,7 +149,8 @@ export function createUI(context: Plugin.Context, controller: Controller) {
                   message: `Open ${history.length} tabs in the background?`,
                 })
               ) {
-                for (const entry of [...history].reverse())
+                // Undo the most recent removals first: indices were recorded after earlier closes.
+                for (const entry of history)
                   await controller.restore(entry.id, false);
               }
             });
@@ -217,7 +218,7 @@ export function createUI(context: Plugin.Context, controller: Controller) {
     if (
       await dialog.confirm({
         title: `Close ${preview.length} idle tabs?`,
-        message: `${preview.map((d) => d.tab.title).join("\n")}\n\nEach tab will be rechecked. Sessions are not deleted. Recover from the Corral.`,
+        message: `${preview.map((d) => `${d.tab.title} · ${d.tab.id} · ${d.tab.directory}`).join("\n")}\n\nEach tab will be rechecked. Sessions are not deleted. Recover from the Corral.`,
       })
     ) {
       const count = await controller.run(

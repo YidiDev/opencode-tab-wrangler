@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import type { Plugin } from "@opencode/plugin/tui";
 import { createHost } from "../src/host";
+import { resolveConfig } from "../src/config";
+import { evaluate, observe } from "../src/policy";
 
 function fixture() {
   const info: Record<string, any> = {
@@ -290,3 +292,42 @@ test("identity changes after verification invalidate eligibility until refreshed
   await h.host.refresh("root");
   expect(h.host.list()[0].known).toBe(true);
 });
+test.each([
+  ["activity", "failed", "error"],
+  ["error", "succeeded", "error"],
+  ["activity", "succeeded", "activity"],
+  [undefined, "failed", "error"],
+] as const)(
+  "positive unread evidence combines %s with %s",
+  async (native, outcome, expected) => {
+    const h = fixture();
+    h.route("elsewhere");
+    const tabs = h.context.ui.tabs.list();
+    h.context.ui.tabs.list = () => tabs.map((t) => ({ ...t, unread: native }));
+    h.context.client.session.get = (async ({ sessionID }: any) => ({
+      ...structuredClone(h.info[sessionID]),
+      outcome,
+      time: { updated: 20, idle: 20, viewed: 0 },
+    })) as any;
+    await h.host.refresh("root");
+    const tab = h.host.list()[0];
+    expect(tab.unread).toBe(expected);
+    expect(tab.known).toBe(true);
+    const config = resolveConfig(
+      {},
+      {
+        idleMinutes: 0,
+        graceMinutes: 0,
+        protections: { unreadActivity: false, unreadErrors: true },
+      },
+    );
+    const decision = evaluate(
+      tab,
+      config,
+      observe(tab, config, undefined, undefined, 100),
+      undefined,
+      200,
+    );
+    expect(decision.eligible).toBe(expected !== "error");
+  },
+);

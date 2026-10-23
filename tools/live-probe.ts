@@ -22,6 +22,46 @@ export default Plugin.define({
     const idle = sessions.slice(0, 3),
       question = sessions[3],
       selected = sessions[4];
+    // Parked synthetic context must not be mistaken for executable queued work.
+    await context.client.session.synthetic({
+      sessionID: idle[0].id,
+      text: "Disposable parked fixture context",
+      resume: false,
+    });
+    const permission = await context.client.session.create({
+      title: "fixture-permission",
+      location,
+      permissions: [
+        { action: "wrangler_fixture", resource: "*", effect: "ask" },
+      ],
+    });
+    sessions.push(permission);
+    const permissionAbort = new AbortController();
+    void context.client.permission
+      .create(
+        {
+          sessionID: permission.id,
+          action: "wrangler_fixture",
+          resources: ["fixture-only"],
+        },
+        { signal: permissionAbort.signal },
+      )
+      .catch(() => {});
+    let waiting = false;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      if (
+        (await context.client.permission.list({ sessionID: permission.id }))
+          .length
+      ) {
+        waiting = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    if (!waiting) {
+      permissionAbort.abort();
+      throw new Error("Fixture permission did not become pending");
+    }
     const child = await context.client.session.create({
       title: "fixture-child-question",
       parentID: question.id,
@@ -62,6 +102,7 @@ export default Plugin.define({
           !restoring &&
           idle.every((s) => !ids.includes(s.id)) &&
           ids.includes(question.id) &&
+          ids.includes(permission.id) &&
           ids.includes(selected.id)
         ) {
           for (const session of [...sessions, child, selectedChild])
@@ -70,6 +111,12 @@ export default Plugin.define({
             sessionID: child.id,
           });
           if (!forms.length) throw new Error("Waiting question lost");
+          if (
+            !(
+              await context.client.permission.list({ sessionID: permission.id })
+            ).length
+          )
+            throw new Error("Waiting permission lost");
           restoring = true;
           await save((draft) => {
             draft.phase = "restoring";
@@ -77,6 +124,8 @@ export default Plugin.define({
             draft.sessionsIntact = true;
             draft.questionProtected = true;
             draft.selectedProtected = true;
+            draft.permissionProtected = true;
+            draft.parkedContextDidNotBlockCleanup = true;
           });
           context.keymap.dispatch("wrangler.restore");
         } else if (restoring && idle.some((s) => ids.includes(s.id))) {
@@ -102,6 +151,9 @@ export default Plugin.define({
         checking = false;
       }
     }, 200);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      permissionAbort.abort();
+    };
   },
 });

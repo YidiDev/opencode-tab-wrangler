@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Reverify server state after intent persistence; bound storage waits and final verification age. Storage errors/timeouts disable further writes/cleanup until reload, without replaying late writes.
+- Combine conflicting unread evidence conservatively so native activity cannot mask a verified error.
+- Fence candidate activity independently from unrelated busy tabs.
+- Restore batches in inverse closure order and show IDs/locations in manual confirmation.
+- Replace wildcard backtracking/matrix work with bounded bit-parallel matching and bounded immutable policy caches.
+- Correct public vulnerability-reporting setup order and extend isolated permission/parked-context evidence.
+
 - Bind cleanup to confirmed IDs; preserve selection activity during refresh.
 - Resolve configuration once per decision pass and index recovery blockers once.
 - Bound and generation-fence concurrent reads without invalidating shared host caches.

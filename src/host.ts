@@ -224,7 +224,10 @@ export function createHost(context: Plugin.Context): Host {
           active: tab.active || activeRoot === tab.sessionID || selectedChild,
           busy: tab.busy,
           attention: tab.attention,
-          unread: tab.unread ?? unread,
+          unread:
+            tab.unread === "error" || unread === "error"
+              ? "error"
+              : (tab.unread ?? unread),
           running:
             Boolean(s?.running) ||
             members.some((id) => d.status(id) === "running"),

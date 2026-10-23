@@ -82,6 +82,7 @@ export async function setup(
       runtime,
       update,
       now: env.now,
+      monotonic: performance.now,
       sleep: sleeper.sleep,
       notify: (message) => context.ui.toast.show({ message, variant: "info" }),
       changed: () => {

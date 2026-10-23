@@ -79,3 +79,38 @@ test("glob agrees with an independent Unicode regular-expression oracle", () => 
       expect(glob(pattern, value, true)).toBe(oracle.test(value));
   }
 });
+test("seeded wildcard fuzzing covers star closure, literal stars, retries, and case folding", () => {
+  let seed = 123;
+  const next = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed;
+  };
+  const chars = ["a", "B", "*", "?", ".", "好", "🙂", "\n"];
+  for (let i = 0; i < 1500; i++) {
+    const pattern = Array.from(
+      { length: next() % 10 },
+      () => chars[next() % chars.length],
+    ).join("");
+    const value = Array.from(
+      { length: next() % 15 },
+      () => chars[next() % chars.length],
+    ).join("");
+    const sensitive = i % 2 === 0,
+      normalized = sensitive ? pattern : pattern.toLowerCase();
+    const expression = [...normalized]
+      .map((c) =>
+        c === "*"
+          ? "[\\s\\S]*"
+          : c === "?"
+            ? "[\\s\\S]"
+            : c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+      )
+      .join("");
+    expect(glob(pattern, value, sensitive)).toBe(
+      new RegExp(`^(?:${expression})$`, "u").test(
+        sensitive ? value : value.toLowerCase(),
+      ),
+    );
+  }
+  expect(glob("*a", "*ba", true)).toBe(true);
+});

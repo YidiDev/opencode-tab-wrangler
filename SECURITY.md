@@ -8,7 +8,7 @@ The preview supports **OpenCode 2.1.4**, tested on Linux x64 with Bun 1.4.0. Oth
 
 Use [GitHub private vulnerability reporting](https://github.com/YidiDev/opencode-tab-wrangler/security/advisories/new). Never post vulnerabilities, credentials, transcripts, or exploitable reproduction details in public issues or PRs.
 
-If that route is unavailable, request a private contact channel from [@YidiDev](https://github.com/YidiDev) with a minimal issue titled **Private security contact requested**, containing no vulnerability details. The maintainer can arrange a private channel. Private vulnerability reporting must be enabled before making this repository public.
+If that route is unavailable, request a private contact channel from [@YidiDev](https://github.com/YidiDev) with a minimal issue titled **Private security contact requested**, containing no vulnerability details. The maintainer can arrange a private channel. GitHub's private vulnerability reporting is configured for public repositories: prepare and verify a fallback private contact while private, then enable and verify GitHub reporting immediately when changing visibility. Do not advertise a reporting channel before verifying that it works.
 
 Include affected versions, impact, and a sanitized reproduction using disposable fixtures. Do not send authorization headers or complete diagnostic archives.
 

@@ -159,7 +159,7 @@ try:
             submitted = True
         if args.cleanup and rendered and report.get("phase") == "passed":
             print(
-                f"PASS: {version}; manager, real automatic closure, selected/question protection, intact sessions, and restoration"
+                f"PASS: {version}; manager, automatic closure, selected/question/permission protection, parked context, intact sessions, and restoration"
             )
             passed = True
             break
