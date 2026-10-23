@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Explicit, isolated OpenCode loading/dialog smoke test. No user sessions or credentials."""
-import fcntl
+
 import argparse
+import fcntl
 import json
 import os
-from pathlib import Path
 import pty
 import re
 import select
@@ -14,11 +14,21 @@ import struct
 import subprocess
 import termios
 import time
+from pathlib import Path
 
 repo = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
-parser.add_argument("--cleanup", action="store_true", help="Also verify real automatic closure, waiting/selected protection, and recovery")
-parser.add_argument("--package", type=Path, default=repo, help="Plugin directory (use an extracted archive for package testing)")
+parser.add_argument(
+    "--cleanup",
+    action="store_true",
+    help="Also verify real automatic closure, waiting/selected protection, and recovery",
+)
+parser.add_argument(
+    "--package",
+    type=Path,
+    default=repo,
+    help="Plugin directory (use an extracted archive for package testing)",
+)
 args = parser.parse_args()
 binary = shutil.which("opencode")
 if not binary:
@@ -29,35 +39,65 @@ if version not in ("opencode v2.1.4", "2.1.4", "v2.1.4"):
 root = repo / ".artifacts" / f"live-{time.time_ns()}"
 project = root / "project"
 project.mkdir(parents=True)
+(project / "child").mkdir()
 config = root / "config" / "opencode"
 config.mkdir(parents=True)
 options = {"mode": "preview"}
 plugins = [{"package": str(args.package.resolve()), "options": options}]
 if args.cleanup:
-    options.update({"mode": "auto", "connectionKey": "isolated-live", "acknowledgeSharedTabs": True,
-                    "idleMinutes": 0, "graceMinutes": 0, "checkSeconds": 5, "minTabs": 1,
-                    "batchSize": 3, "batchDelaySeconds": 0})
+    options.update(
+        {
+            "mode": "auto",
+            "connectionKey": "isolated-live",
+            "acknowledgeSharedTabs": True,
+            "idleMinutes": 0.02,
+            "graceMinutes": 0.02,
+            "checkSeconds": 5,
+            "minTabs": 1,
+            "batchSize": 3,
+            "batchDelaySeconds": 0,
+        }
+    )
     probe = root / "probe"
     probe.mkdir()
     (probe / "tui.ts").write_text((repo / "tools" / "live-probe.ts").read_text())
     plugins.append({"package": str(probe)})
-(config / "cli.json").write_text(json.dumps({
-    "$schema": "https://opencode.ai/v2/cli.json",
-    "highlights": False,
-    "plugins": plugins,
-}))
+(config / "cli.json").write_text(
+    json.dumps(
+        {
+            "$schema": "https://opencode.ai/v2/cli.json",
+            "highlights": False,
+            "plugins": plugins,
+        }
+    )
+)
 (config / "opencode.json").write_text(json.dumps({"$schema": "https://opencode.ai/config.json"}))
 # Deliberately do not inherit provider keys, service URLs, or OpenCode overrides.
 env = {key: os.environ[key] for key in ("PATH", "LANG", "LC_ALL", "SHELL") if key in os.environ}
-env.update({"HOME": str(root / "home"), "XDG_CONFIG_HOME": str(root / "config"),
-            "OPENCODE_TEST_HOME": str(root / "home"),
-            "XDG_DATA_HOME": str(root / "data"), "XDG_STATE_HOME": str(root / "state"),
-            "XDG_CACHE_HOME": str(root / "cache"), "TERM": "xterm-256color", "COLORTERM": "truecolor"})
+env.update(
+    {
+        "HOME": str(root / "home"),
+        "XDG_CONFIG_HOME": str(root / "config"),
+        "OPENCODE_TEST_HOME": str(root / "home"),
+        "XDG_DATA_HOME": str(root / "data"),
+        "XDG_STATE_HOME": str(root / "state"),
+        "XDG_CACHE_HOME": str(root / "cache"),
+        "TERM": "xterm-256color",
+        "COLORTERM": "truecolor",
+    }
+)
 Path(env["HOME"]).mkdir()
 master, slave = pty.openpty()
 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 48, 140, 0, 0))
-process = subprocess.Popen([binary, "--standalone", "--log-level", "debug", str(project)],
-                           stdin=slave, stdout=slave, stderr=slave, env=env, cwd=project, start_new_session=True)
+process = subprocess.Popen(
+    [binary, "--standalone", "--log-level", "debug", str(project)],
+    stdin=slave,
+    stdout=slave,
+    stderr=slave,
+    env=env,
+    cwd=project,
+    start_new_session=True,
+)
 os.close(slave)
 capture = bytearray()
 sent = False
@@ -68,6 +108,19 @@ text = ""
 start = time.monotonic()
 try:
     while time.monotonic() - start < 60:
+        report = {}
+        results = (
+            root
+            / "state"
+            / "opencode"
+            / "latest"
+            / "tui"
+            / "plugin.test.tab-wrangler-probe.results.json"
+        )
+        if args.cleanup and results.exists():
+            report = json.loads(results.read_text())
+            if report.get("phase") == "failed":
+                raise RuntimeError("Live cleanup probe failed")
         if process.poll() is not None:
             break
         if select.select([master], [], [], 0.1)[0]:
@@ -86,7 +139,11 @@ try:
                 os.write(master, b"\x1b]11;rgb:1010/1010/1010\x1b\\")
             if b"\x1b]10;?" in data:
                 os.write(master, b"\x1b]10;rgb:eeee/eeee/eeee\x1b\\")
-        if not sent and time.monotonic() - start > 12:
+        if (
+            not sent
+            and time.monotonic() - start > 12
+            and (not args.cleanup or report.get("phase") == "passed")
+        ):
             os.write(master, b"/wrangler\r")
             sent = True
         text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", capture.decode("utf-8", errors="replace"))
@@ -100,28 +157,31 @@ try:
             # First Enter accepts slash completion; second invokes the recognized command.
             os.write(master, b"\r")
             submitted = True
-        if args.cleanup and rendered:
-            results = root / "state" / "opencode" / "latest" / "tui" / "plugin.test.tab-wrangler-probe.results.json"
-            if results.exists():
-                report = json.loads(results.read_text())
-                if report.get("phase") == "failed":
-                    raise RuntimeError("Live cleanup probe failed")
-                if report.get("phase") == "passed":
-                    print(f"PASS: {version}; manager, real automatic closure, selected/question protection, intact sessions, and restoration")
-                    passed = True
-                    break
+        if args.cleanup and rendered and report.get("phase") == "passed":
+            print(
+                f"PASS: {version}; manager, real automatic closure, selected/question protection, intact sessions, and restoration"
+            )
+            passed = True
+            break
     else:
         raise RuntimeError("Timed out before live assertions completed")
     if not passed:
         raise RuntimeError("OpenCode exited before live assertions completed")
 finally:
     (root / "terminal.log").write_bytes(capture)
-    if process.poll() is None:
+    try:
         os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    if process.poll() is None:
         try:
             process.wait(timeout=10)
         except subprocess.TimeoutExpired:
             os.killpg(process.pid, signal.SIGKILL)
             process.wait()
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
     os.close(master)
     print(f"Isolated evidence: {root}")

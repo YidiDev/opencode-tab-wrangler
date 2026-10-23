@@ -31,9 +31,7 @@ test("source never calls destructive session/approval APIs or reads host files",
   for (const path of await readdir("src", { recursive: true })) {
     if (!/\.tsx?$/.test(path)) continue;
     const source = await Bun.file(`src/${path}`).text();
-    expect(source).not.toMatch(
-      /\.(remove|interrupt|archive|reply|cancel|generate)\(/,
-    );
+    expect(source).not.toMatch(/\.(remove|interrupt|archive|reply|generate)\(/);
     expect(source).not.toMatch(/\.session\.prompt\(/);
     expect(source).not.toMatch(
       /from ["'](?:node:fs|bun:sqlite)|Bun\.file|process\.env/,

@@ -1,5 +1,5 @@
 import type { Plugin } from "@opencode/plugin/tui";
-import { merge, ruleSchema, type Rule } from "./config";
+import { ruleSchema, type Rule } from "./config";
 import type { Controller } from "./controller";
 
 export async function rulesUI(context: Plugin.Context, controller: Controller) {
@@ -40,9 +40,7 @@ export async function rulesUI(context: Plugin.Context, controller: Controller) {
       }))
     )
       return;
-    await controller.preferences(
-      merge(controller.dep.state.preferences, { rules: next }),
-    );
+    await controller.patchPreferences({ rules: next });
   }
   if (selection === "$json") {
     const input = await dialog.prompt({

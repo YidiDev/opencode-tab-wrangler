@@ -1,0 +1,3 @@
+[test]
+coverageSkipTestFiles = true
+coverageThreshold = { lines = 0.80, functions = 0.75, statements = 0.80 }

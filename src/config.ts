@@ -48,6 +48,9 @@ export const configSchema = z.strictObject({
   protections,
   activity,
   checkSeconds: z.number().int().min(5).max(3600),
+  refreshTimeoutSeconds: z.number().int().min(1).max(120),
+  refreshConcurrency: z.number().int().min(1).max(8),
+  previewRefreshSeconds: z.number().int().min(30).max(3600),
   minTabs: z.number().int().min(0).max(10000),
   softMaxTabs: z.number().int().min(1).max(10000).nullable(),
   cleanup: z.enum(["all-idle", "over-limit"]),
@@ -98,6 +101,9 @@ export const defaults: Config = {
   },
   activity: { selection: true, sessionUpdates: true, backgroundEvents: true },
   checkSeconds: 30,
+  refreshTimeoutSeconds: 15,
+  refreshConcurrency: 3,
+  previewRefreshSeconds: 300,
   minTabs: 5,
   softMaxTabs: null,
   cleanup: "all-idle",
@@ -129,15 +135,20 @@ export function resolveConfig(
   preferences: Options = {},
   options: Options = {},
 ): Config {
+  optionsSchema.parse(preferences);
+  optionsSchema.parse(options);
   const config = configSchema.parse(
     merge(merge(defaults, preferences), options),
   );
   if (config.softMaxTabs !== null && config.softMaxTabs < config.minTabs)
-    throw new Error("softMaxTabs must be at least minTabs");
+    throw new SettingsError("softMaxTabs must be at least minTabs");
   if (config.cleanup === "over-limit" && config.softMaxTabs === null)
-    throw new Error("over-limit requires softMaxTabs");
+    throw new SettingsError(
+      "Choose softMaxTabs before enabling over-limit cleanup",
+    );
   return config;
 }
+export class SettingsError extends Error {}
 export function fileControls(options: Options, path: string): boolean {
   let current: unknown = options;
   for (const key of path.split(".")) {

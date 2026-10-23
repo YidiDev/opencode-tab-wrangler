@@ -30,6 +30,17 @@
       "additionalProperties": false
     },
     "checkSeconds": { "type": "integer", "minimum": 5, "maximum": 3600 },
+    "refreshTimeoutSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 120
+    },
+    "refreshConcurrency": { "type": "integer", "minimum": 1, "maximum": 8 },
+    "previewRefreshSeconds": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 3600
+    },
     "minTabs": { "type": "integer", "minimum": 0, "maximum": 10000 },
     "softMaxTabs": {
       "anyOf": [

@@ -1,0 +1,24 @@
+name: Bug report
+description: Report a reproducible behavior or compatibility problem
+body:
+  - type: markdown
+    attributes:
+      value: "Do not post credentials, transcript contents, question text, or sensitive paths. Report security vulnerabilities privately; see SECURITY.md."
+  - type: input
+    id: versions
+    attributes:
+      label: Versions and platform
+      description: OpenCode, Bun, plugin version/commit, OS and architecture
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps, expected behavior, and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: settings
+    attributes:
+      label: Minimal redacted settings and inspector reasons
+      description: Include mode, relevant policy rules, and whether multiple terminals share the layout. Remove titles and private paths.

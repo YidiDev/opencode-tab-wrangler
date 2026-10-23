@@ -3,3 +3,6 @@ coverage/
 *.tgz
 .DS_Store
 .artifacts/
+.venv/
+.ruff_cache/
+__pycache__/

@@ -21,33 +21,44 @@
     "schema.json",
     "README.md",
     "DEVELOPMENT.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "CODE_OF_CONDUCT.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
-    "check": "prettier --check . && tsc --noEmit && bun run schema:check && bun test",
+    "check": "prettier --check . && bun run lint && tsc --noEmit && bun run schema:check && bun test",
+    "lint": "eslint src test tools tui.ts eslint.config.js",
+    "lint:python": "python3 -m ruff check tools && python3 -m ruff format --check tools",
+    "test:security": "bun tools/security.ts && bun audit",
     "schema": "bun tools/schema.ts",
     "schema:check": "bun tools/schema.ts --check",
     "test:live": "python3 tools/pty-smoke.py --cleanup",
     "test:package": "python3 tools/package-smoke.py",
-    "test:coverage": "bun test --coverage"
+    "test:coverage": "bun test --preload ./test/coverage-preload.ts --coverage --coverage-reporter=text --coverage-reporter=lcov && bun tools/coverage.ts"
   },
   "peerDependencies": {
     "@opencode/plugin": "2.1.4",
     "@opentui/core": ">=0.6.8 <0.7.0",
     "@opentui/solid": ">=0.6.8 <0.7.0",
-    "solid-js": "^1.9.0"
+    "solid-js": ">=1.9.17 <2"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@opencode/plugin": "2.1.4",
     "@opentui/core": "0.6.8",
     "@opentui/solid": "0.6.8",
     "@types/bun": "^1.3.0",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
     "prettier": "^3.6.2",
-    "solid-js": "1.9.15",
-    "typescript": "^5.9.0"
+    "solid-js": "1.9.17",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.72.0"
   },
   "dependencies": {
     "zod": "^4.0.0"

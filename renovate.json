@@ -1,0 +1,14 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":pinDevDependencies"],
+  "enabledManagers": ["npm"],
+  "dependencyDashboard": true,
+  "automerge": false,
+  "packageRules": [
+    {
+      "matchPackageNames": ["@opencode/**", "@opentui/**", "solid-js"],
+      "groupName": "reviewed host runtime",
+      "automerge": false
+    }
+  ]
+}

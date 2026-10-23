@@ -4,10 +4,12 @@ Configurable tab housekeeping for the **OpenCode 2.1.4 terminal**, inspired by C
 
 **Preview release. Not published to npm.** Defaults to preview mode. No model calls, backend service, MCP server, telemetry, or access to transcript contents.
 
+**Compatibility:** OpenCode **2.1.4** only; automated/live evidence is Linux x64 with Bun **1.4.0**. Other platforms are unverified. Keep automatic cleanup in a single terminal when possible. This is not a replacement tab strip or a cross-terminal pinning system.
+
 ## Install locally
 
 ```sh
-git clone git@github.com:YidiDev/opencode-tab-wrangler.git
+git clone https://github.com/YidiDev/opencode-tab-wrangler.git
 cd opencode-tab-wrangler
 bun install --frozen-lockfile
 bun run check
@@ -38,6 +40,15 @@ The plugin **does not install or enable itself**, and this repository does not c
 3. Read the shared-tab warning and enable `acknowledgeSharedTabs` only if appropriate.
 4. Try **Preview and clean eligible tabs** for a confirmed manual batch.
 5. Set `mode` to `auto` when satisfied. All protections remain enabled by default.
+
+If nothing is eligible, inspect the stated protection reasons. The default `minTabs: 5` retains at least five tabs, and default idle/grace intervals are 30 minutes. Preview mode never closes automatically. The manager explicitly reports setup-blocked, paused, off, scheduled, or automatic status.
+
+### A typical workflow
+
+1. `/wrangler` → **Open tabs / protection inspector** → choose a tab to see its idle time, matched rules, and protection reasons.
+2. Lock an important session, or exclude its project/directory.
+3. **Preview and clean eligible tabs** shows exactly which IDs may close. If state changes during confirmation, tabs can be skipped but never substituted.
+4. **Corral** reopens a session without rerunning its prompt; **Wrangler: reopen last closed tab** is the quick recovery command.
 
 ### Important safety limitations
 
@@ -74,6 +85,8 @@ All properties below live inside the plugin's `options` object. The generated [`
 
 Precedence: **defaults → saved UI preferences → explicit file options**. Nested objects merge; arrays replace. File-controlled fields are read-only in the UI. A partial file-controlled object still allows editing its other fields. Changes grant a fresh grace period. Reset UI preferences by editing **all UI preferences as JSON** to `{}`; this doesn't remove file overrides, locks, or history.
 
+Each layer is validated independently, so an invalid saved value cannot hide behind a valid file override. Ordinary UI edits patch the latest durable preferences transactionally, preserving unrelated concurrent edits. Editing all preferences as JSON intentionally replaces them.
+
 Invalid settings, unsupported state versions, or recovery-storage failures disable the plugin without closing tabs. Unknown setting names are rejected, not ignored. There is no arbitrary code/regex policy execution.
 
 ### General settings
@@ -96,6 +109,16 @@ Invalid settings, unsupported state versions, or recovery-storage failures disab
 | `notification`          | `"summary"`      | One summary toast per successful batch, or `silent`                                       |
 
 For `over-limit`, `softMaxTabs` is required and must be at least `minTabs`. In `all-idle` mode the soft maximum does not limit cleanup. A floor of zero still cannot override selected/running protections. Protected tabs may exceed the soft maximum indefinitely.
+
+Refresh controls:
+
+| Option                  | Default | Meaning                                                                                           |
+| ----------------------- | ------- | ------------------------------------------------------------------------------------------------- |
+| `refreshTimeoutSeconds` | `15`    | Entire refresh-pass deadline, 1–120 seconds; individual roots receive a bounded share             |
+| `refreshConcurrency`    | `3`     | Concurrent root families, 1–8; descendants remain bounded to 256                                  |
+| `previewRefreshSeconds` | `300`   | Background preview refresh interval, 30–3600 seconds; opening the inspector refreshes immediately |
+
+Failed, timed-out, and unvisited roots remain unknown/protected. Completed roots can remain usable when another root stalls. Bulk passes rotate their starting point to avoid starvation. Each actual candidate receives its own fresh read, including a fresh active-execution snapshot, before intent persistence and the final local recheck. Shared OpenCode caches are not invalidated by Wrangler.
 
 ### Independent protections
 
@@ -137,6 +160,8 @@ Pending means queued execution/control inbox work, not parked synthetic context.
 The closure deadline is the **later** of last activity + idle interval and last grace reset + grace interval. A selected or protected tab cannot become eligible; clearing a protection starts fresh idle and grace intervals, even with optional activity sources disabled.
 
 Startup, reload, reopening, resume, re-enabling native tabs, observation gaps, clock rollback, and configuration changes grant fresh grace. Time spent while the plugin is absent is not counted. A restored tab cannot immediately disappear into an auto-close loop. Pause is local to a TUI, survives plugin reload, and ends when that TUI exits.
+
+Selection activity is recorded even while refresh is in progress. Deliberate batch waits are not mistaken for machine sleep. Runtime observations are bounded to currently open tabs; memory checkpoints are coalesced and flushed on orderly plugin unload.
 
 ### Ordered project/title rules
 
@@ -193,6 +218,8 @@ Durable storage contains preferences, session locks, and bounded recovery metada
 
 An `intent` is written **before** closing. Failed persistence prevents closure. Unfinished intents become `uncertain` on reload, never automatically replayed. Explicitly inspect, restore, or forget uncertain entries. The no-retry protection lasts while the uncertain entry is retained; expiry, clearing, or forgetting removes that record. Manual closure outside Wrangler is not added to the durable corral (OpenCode has its own reopen-last-closed behavior).
 
+Housekeeping physically prunes expired durable entries and expired locks on the next available scheduler check (at most once per minute under frequent checks). It also runs while paused or off. Logical history reads hide expired entries immediately; the plugin does not promise deletion while OpenCode is stopped or storage is unavailable. Permanent locks intentionally persist until explicitly unlocked.
+
 ## Complete automatic-cleanup example
 
 Merge this plugin entry into `cli.json` only after reviewing the shared-tab limitation:
@@ -231,7 +258,7 @@ Merge this plugin entry into `cli.json` only after reviewing the shared-tab limi
 
 ## Development and verification
 
-Linux x64, Bun 1.4.0, OpenCode 2.1.4; OpenTUI 0.6.8 and Solid 1.9.15 for development. Host APIs are isolated in `src/host.ts`; pure policy is in `src/policy.ts`. There is no background polling of all historical sessions or transcript downloads. Refresh is limited to open tabs and descendants, sequentially, with a fresh active-execution read before considering closure.
+Linux x64, Bun 1.4.0, OpenCode 2.1.4; OpenTUI 0.6.8 and patched Solid 1.9.17 for development. Host APIs are isolated in `src/host.ts`; pure policy is in `src/policy.ts`. Refresh is bounded to open tabs and descendants, with configurable concurrency/deadlines. There are no transcript downloads or scans of all historical sessions.
 
 ```sh
 bun install --frozen-lockfile
@@ -244,5 +271,9 @@ bun pm pack
 ```
 
 Tests cover policy, configuration precedence, wildcard rules, family aggregation, storage failures, local races, clock/pause/reload grace, uncertain outcomes, restore, UI workflows, and package contracts. The explicit live test verifies real automatic closure, selected/question protection, session preservation, and restoration with disposable sessions and no model prompts. The package test repeats it outside the checkout with production dependencies only. Coverage only describes files exercised by tests; it is not proof of complete host compatibility.
+
+CI runs installed-package/live tests, TypeScript and Python linting, schema parity, dependency/credential checks, and full-production-module coverage accounting. Coverage floors are 80% lines/75% functions per production file and 85% aggregate; tests/helpers are not part of the custom production denominator. Property and race tests supplement coverage, not the reverse. CodeQL runs when public-repository entitlement is available; it is skipped while this repository is private.
+
+See [Contributing](CONTRIBUTING.md), [Security](SECURITY.md), [Code of conduct](CODE_OF_CONDUCT.md), and [Changelog](CHANGELOG.md). Dependency-update configurations are supplied; Renovate still requires its GitHub app to be authorized. No automation publishes to npm or changes repository visibility.
 
 See [`DEVELOPMENT.md`](DEVELOPMENT.md) for the live smoke test, known limits, and release checklist. To disable, remove the CLI plugin entry or set mode `off`; no database cleanup or session deletion is necessary. Removing the entry does not erase the host's stored plugin preferences/history.

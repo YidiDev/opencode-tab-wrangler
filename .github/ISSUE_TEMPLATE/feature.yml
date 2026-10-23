@@ -1,0 +1,15 @@
+name: Feature request
+description: Suggest an improvement grounded in a real workflow
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What workflow is difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior, alternatives, and safety considerations
+    validations:
+      required: true

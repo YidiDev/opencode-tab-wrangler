@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security reporting
+    url: https://github.com/YidiDev/opencode-tab-wrangler/blob/main/SECURITY.md
+    about: Please read the private reporting instructions before disclosing a vulnerability.
