@@ -1,6 +1,6 @@
 import { Controller } from "../src/controller";
 import { initialState } from "../src/state";
-import type { Tab, Runtime, Persisted } from "../src/model";
+import type { Tab, Runtime } from "../src/model";
 import type { Options } from "../src/config";
 import type { Host } from "../src/host";
 

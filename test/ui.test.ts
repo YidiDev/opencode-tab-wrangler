@@ -124,7 +124,7 @@ test("guided keep-open rule creation", async () => {
     stop: true,
   });
 });
-test("rules can be toggled and reordered without editing JSON", async () => {
+test("rules can be toggled without editing JSON", async () => {
   const h = uiFixture(["rules", "0", "toggle"]);
   await h.controller.preferences({
     rules: [
@@ -134,6 +134,28 @@ test("rules can be toggled and reordered without editing JSON", async () => {
   });
   await h.ui.settings();
   expect(h.controller.config().rules[0].enabled).toBe(false);
+});
+test("cross-field and JSON settings errors explain how to correct the input", async () => {
+  const h = uiFixture(["cleanup", "over-limit"]);
+  await h.ui.settings();
+  expect(h.alerts[0]).toContain("softMaxTabs");
+  const j = uiFixture(["batchSize"], ["{"]);
+  await j.ui.settings();
+  expect(j.alerts[0]).toContain("Invalid JSON");
+});
+test("rule ordering controls really reorder", async () => {
+  const h = uiFixture(["rules", "1", "up"]);
+  await h.controller.preferences({
+    rules: [
+      { name: "First", match: {}, set: {} },
+      { name: "Second", match: {}, set: {} },
+    ],
+  });
+  await h.ui.settings();
+  expect(h.controller.config().rules.map((r) => r.name)).toEqual([
+    "Second",
+    "First",
+  ]);
 });
 test("one-click exclusion takes precedence over existing stopping rules", async () => {
   const h = uiFixture(["one", "directory"]);

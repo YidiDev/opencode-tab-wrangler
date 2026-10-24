@@ -1,5 +1,11 @@
 import type { Plugin } from "@opencode/plugin/tui";
-import { defaults, fileControls, merge, type Options } from "./config";
+import {
+  defaults,
+  fileControls,
+  merge,
+  SettingsError,
+  type Options,
+} from "./config";
 import type { Controller } from "./controller";
 import { rulesUI } from "./rules-ui";
 
@@ -38,7 +44,11 @@ export function createUI(context: Plugin.Context, controller: Controller) {
       await alert(
         error instanceof Error && error.name === "ZodError"
           ? `Invalid settings. No changes saved.\n${error.message}`
-          : "Action failed; no further cleanup was attempted.",
+          : error instanceof SettingsError
+            ? error.message
+            : error instanceof SyntaxError
+              ? "Invalid JSON. No settings were saved; use double-quoted keys and valid JSON values."
+              : "Action failed; no further cleanup was attempted. Check storage availability and retry.",
       );
     }
   }
@@ -89,20 +99,18 @@ export function createUI(context: Plugin.Context, controller: Controller) {
         );
         return;
       }
-      await controller.preferences(
-        merge(controller.dep.state.preferences, {
-          rules: [
-            {
-              name: `Exclude ${action}`,
-              enabled: true,
-              match: { [action]: value, caseSensitive: true },
-              set: { excluded: true },
-              stop: true,
-            },
-            ...controller.config().rules,
-          ],
-        }),
-      );
+      await controller.patchPreferences({
+        rules: [
+          {
+            name: `Exclude ${action}`,
+            enabled: true,
+            match: { [action]: value, caseSensitive: true },
+            set: { excluded: true },
+            stop: true,
+          },
+          ...controller.config().rules,
+        ],
+      });
     }
   }
   async function tabs() {
@@ -113,7 +121,7 @@ export function createUI(context: Plugin.Context, controller: Controller) {
       options: controller.decisions().map((d) => ({
         title: `${d.tab.active ? "● " : ""}${d.tab.title}`,
         value: d.tab.id,
-        description: `${minutes(d.idleMs)} idle · ${candidateIDs.has(d.tab.id) ? "Will close in next batch" : d.eligible ? "Eligible; count/batch policy retains it" : pretty(d.reasons)}`,
+        description: `${minutes(d.idleMs)} idle · ${candidateIDs.has(d.tab.id) ? "Policy candidate; " + controller.status() : d.eligible ? "Eligible; count/batch policy retains it" : pretty(d.reasons)}`,
         category: d.tab.directory || "Unknown location",
       })),
     });
@@ -212,7 +220,10 @@ export function createUI(context: Plugin.Context, controller: Controller) {
         message: `${preview.map((d) => d.tab.title).join("\n")}\n\nEach tab will be rechecked. Sessions are not deleted. Recover from the Corral.`,
       })
     ) {
-      const count = await controller.run(false);
+      const count = await controller.run(
+        false,
+        preview.map((d) => d.tab.id),
+      );
       if (!count)
         await alert(
           "No tabs closed. State may have changed, a protection may apply, or persistence could not be confirmed.",
@@ -333,13 +344,10 @@ export function createUI(context: Plugin.Context, controller: Controller) {
       )
         return;
       const [parent, child] = path.split(".");
-      await controller.preferences(
-        merge(
-          controller.dep.state.preferences,
-          child
-            ? { [parent]: { [child]: result === "true" } }
-            : { [parent]: result === "true" },
-        ),
+      await controller.patchPreferences(
+        child
+          ? { [parent]: { [child]: result === "true" } }
+          : { [parent]: result === "true" },
       );
       return;
     }
@@ -369,9 +377,7 @@ export function createUI(context: Plugin.Context, controller: Controller) {
         }))
       )
         return;
-      await controller.preferences(
-        merge(controller.dep.state.preferences, { [key]: selected }),
-      );
+      await controller.patchPreferences({ [key]: selected });
       return;
     }
     if (key === "connectionKey") {
@@ -382,9 +388,7 @@ export function createUI(context: Plugin.Context, controller: Controller) {
           "Unique label for this server. Change when connecting to another server.",
       });
       if (selected !== undefined)
-        await controller.preferences(
-          merge(controller.dep.state.preferences, { connectionKey: selected }),
-        );
+        await controller.patchPreferences({ connectionKey: selected });
       return;
     }
     const input = await dialog.prompt({
@@ -418,7 +422,11 @@ export function createUI(context: Plugin.Context, controller: Controller) {
       }))
     )
       return;
-    await controller.preferences(next as Options);
+    if (key === "$json") await controller.preferences(next as Options);
+    else
+      await controller.patchPreferences(
+        child ? { [parent]: { [child]: parsed } } : { [parent]: parsed },
+      );
   }
   async function pause() {
     const choice = await dialog.select({
@@ -444,7 +452,7 @@ export function createUI(context: Plugin.Context, controller: Controller) {
   async function manager() {
     const c = controller.config();
     const action = await dialog.select({
-      title: `Tab Wrangler · ${c.mode}${controller.paused() ? " · paused" : ""}`,
+      title: `Tab Wrangler · ${controller.status()}`,
       options: [
         {
           title: "Open tabs / protection inspector",

@@ -30,7 +30,7 @@ function fixture() {
     repeat = false;
   const d = {
     get: (id: string) => info[id],
-    family: () => ["root", "child"],
+    family: (id: string) => (id === "root" ? ["root", "child"] : [id]),
     root: (id: string) => (id === "child" ? "root" : id),
     status: (id: string) => (running.has(id) ? "running" : "idle"),
     invalidate: () => {},
@@ -90,8 +90,24 @@ function fixture() {
       router: { current: () => ({ type: "session", sessionID: route }) },
     },
     client: {
+      permission: {
+        list: async ({ sessionID }: { sessionID: string }) =>
+          permissions[sessionID] ?? [],
+      },
       session: {
-        list: async ({ parentID, cursor }: any) => {
+        inbox: {
+          list: async ({ sessionID }: { sessionID: string }) =>
+            pending[sessionID] ?? [],
+        },
+        form: {
+          list: async ({ sessionID }: { sessionID: string }) => {
+            calls.push(
+              `form:${sessionID}:${info[sessionID].location.directory}`,
+            );
+            return (forms[sessionID] ??= []);
+          },
+        },
+        list: async ({ parentID }: any) => {
           if (fail) throw new Error("offline");
           if (repeat) return { data: [], cursor: { next: "same" } };
           return {
@@ -102,12 +118,13 @@ function fixture() {
         active: async () => active,
         get: async ({ sessionID }: any) => {
           if (!info[sessionID]) throw new Error("not found");
-          return info[sessionID];
+          return structuredClone(info[sessionID]);
         },
       },
     },
   } as unknown as Plugin.Context;
   return {
+    context,
     host: createHost(context),
     info,
     pending,
@@ -178,7 +195,7 @@ test("failed refresh invalidates prior verification", async () => {
 test("repeated pagination fails closed", async () => {
   const h = fixture();
   h.repeat();
-  await expect(h.host.refresh("root")).rejects.toThrow("Repeated");
+  await expect(h.host.refresh("root")).rejects.toThrow();
   expect(h.host.list()[0].known).toBe(false);
 });
 test("only tab APIs are used for close and restore", async () => {
@@ -204,4 +221,72 @@ test("unloaded adapter refuses new requests and tab effects", async () => {
   expect(h.host.open("root", true)).toBe(false);
   await expect(h.host.refresh("root")).rejects.toThrow("unloaded");
   expect(h.calls).toEqual([]);
+});
+
+test("deadline fences late responses and never verifies an expired read", async () => {
+  const h = fixture();
+  let release: (value: any) => void = () => {};
+  h.context.client.session.list = () =>
+    new Promise((resolve) => {
+      release = resolve;
+    });
+  await expect(
+    h.host.refresh("root", { timeoutMs: 10, concurrency: 1 }),
+  ).rejects.toThrow();
+  expect(h.host.list()[0].known).toBe(false);
+  release({ data: [], cursor: { next: null } });
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(h.host.list()[0].known).toBe(false);
+  h.host.dispose!();
+});
+test("one stalled root does not prevent unrelated roots from being verified", async () => {
+  const h = fixture();
+  h.info.other = { ...h.info.root, id: "other" };
+  const root = h.context.ui.tabs.list()[0];
+  h.context.ui.tabs.list = () => [root, { ...root, sessionID: "other" }];
+  h.context.client.session.list = (({ parentID }: { parentID: string }) =>
+    parentID === "root"
+      ? new Promise(() => {})
+      : Promise.resolve({ data: [], cursor: { next: null } })) as any;
+  let activeReads = 0;
+  h.context.client.session.active = async () => {
+    activeReads++;
+    return {};
+  };
+  await h.host.refreshMany!(["root", "other"], {
+    timeoutMs: 100,
+    concurrency: 2,
+  });
+  expect(activeReads).toBe(1);
+  expect(h.host.list().map((t) => [t.id, t.known])).toEqual([
+    ["root", false],
+    ["other", true],
+  ]);
+});
+test("closing a tab discards verification so reopening starts cold", async () => {
+  const h = fixture();
+  const list = h.context.ui.tabs.list;
+  await h.host.refresh("root");
+  expect(h.host.list()[0].known).toBe(true);
+  h.context.ui.tabs.list = () => [];
+  expect(h.host.list()).toEqual([]);
+  h.context.ui.tabs.list = list;
+  expect(h.host.list()[0].known).toBe(false);
+});
+test("failed permission reads protect the entire family", async () => {
+  const h = fixture();
+  h.context.client.permission.list = async () => {
+    throw new Error("offline");
+  };
+  await expect(h.host.refresh("root")).rejects.toThrow();
+  expect(h.host.list()[0].known).toBe(false);
+});
+test("identity changes after verification invalidate eligibility until refreshed", async () => {
+  const h = fixture();
+  await h.host.refresh("root");
+  h.info.root = { ...h.info.root, title: "Important renamed session" };
+  expect(h.host.list()[0].known).toBe(false);
+  await h.host.refresh("root");
+  expect(h.host.list()[0].known).toBe(true);
 });

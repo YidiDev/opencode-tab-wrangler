@@ -16,13 +16,19 @@ No internal host renderable traversal, filesystem access, monkey patches, or ser
 
 ## Commands
 
-`bun run check` checks formatting, TypeScript, generated-schema parity, and tests. `bun run schema` regenerates the JSON schema; commit it with schema changes. `bun pm pack` produces the distributable archive. Use the frozen lockfile in CI.
+`bun run check` checks formatting, ESLint, TypeScript, generated-schema parity, and tests. `bun run schema` regenerates the JSON schema; commit it with schema changes. `bun pm pack` produces the distributable archive. Use the frozen lockfile in CI. Python harnesses use pinned Ruff (`requirements-dev.txt`); see `CONTRIBUTING.md` for virtualenv setup.
+
+`bun run test:coverage` explicitly loads every production module, including lifecycle wiring. Bun applies coverage floors and `tools/coverage.ts` separately verifies every source file plus production-only aggregate floors. LCOV is evidence, not branch-completeness proof; no branch coverage percentage is claimed.
+
+`bun run test:security` runs a deliberately limited credential-pattern scanner and `bun audit`. There are no audit suppressions. The hosted installed-package job obtains the exact native `@opencode/cli-linux-x64@2.1.4` archive through `tools/install-host.py`, verifies its committed SHA-512 SRI, then extracts only the allowed executable. It never pipes a mutable installer into a shell.
 
 `python3 tools/pty-smoke.py` is an explicit, isolated dialog smoke test. It requires installed OpenCode 2.1.4 and Python 3 on Linux. It starts only its own `--standalone` server, isolates XDG directories and the test HOME, uses a temporary project, loads this checkout in preview mode, and captures terminal output under ignored `.artifacts/`. It does not use API credentials or submit a model prompt. The process is terminated afterward.
 
-`bun run test:live` additionally loads a disposable fixture plugin, creates five sessions and a pending question without model calls, verifies three idle tabs close automatically while the selected and question-waiting tabs stay open, verifies all sessions and the question still exist, and restores a closed tab through Wrangler's real palette command. `bun run test:package` packs the archive, extracts it outside the repository, installs only production dependencies, and repeats the same live assertions. This prevents accidental fallback to development node_modules. Both commands passed on OpenCode 2.1.4 during initial implementation. These targeted tests do not certify the entire live matrix below.
+`bun run test:live` additionally loads a disposable fixture plugin, creates five root sessions and two cross-directory children without model calls, verifies three idle tabs close automatically while the selected and question-waiting roots stay open, verifies all seven sessions and the descendant question still exist, and restores/focuses a closed tab through Wrangler's real palette command. Selection is tested while viewing a child; idle/grace intervals are nonzero. `bun run test:package` verifies an exact runtime/doc archive allowlist, extracts outside the repository, installs only production dependencies, and repeats the same live assertions. This prevents accidental fallback to development node_modules. These targeted tests do not certify the entire live matrix below.
 
 ## Release gates
+
+GitHub Actions enforces quality/security/coverage plus source and production-only installed-package live tests on pushes and PRs. Actions are SHA-pinned, permissions minimal, jobs timed out, and superseded runs cancelled. Raw terminal/server logs are not uploaded. Weekly runs repeat these checks; they do not silently widen host support. CodeQL is public-only until private scanning entitlement is available.
 
 1. Run all checks, schema parity, package inspection, and isolated live loading.
 2. Confirm unread `activity` and `error` map to the host strip.
@@ -32,6 +38,7 @@ No internal host renderable traversal, filesystem access, monkey patches, or ser
 6. Test disconnect, server restart, sleep, hot reload, tabs disabled, global/cwd scope, and competing TUI instances. Do not claim other-client selected-tab safety: public API does not provide it.
 7. Validate packed CLI-only entrypoint with no project `node_modules` fallback.
 8. Document residual conditional-close races and any unsupported scenario. Do not widen the exact host-version gate without this evidence.
+9. Before changing visibility, enable private vulnerability reporting and appropriate secret scanning, authorize Renovate if desired, and require the `quality` and `installed-package` checks on `main`. Branch protection is currently unavailable under the private repository's account plan; do not claim it is configured. No workflow automatically publishes packages or changes visibility.
 
 ## Reviewed host behavior (2.1.4 source)
 

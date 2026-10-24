@@ -1,4 +1,10 @@
-import { inSchedule, policyFor, validIdentity, type Config } from "./config";
+import {
+  inSchedule,
+  policyFor,
+  validIdentity,
+  type Config,
+  type Policy,
+} from "./config";
 import type { Decision, Lock, Observation, Tab } from "./model";
 
 export function protectionReasons(
@@ -6,8 +12,9 @@ export function protectionReasons(
   config: Config,
   lock: Lock | undefined,
   now: number,
+  resolved?: Policy,
 ): string[] {
-  const { policy } = policyFor(config, tab),
+  const policy = resolved ?? policyFor(config, tab).policy,
     p = policy.protections;
   const reasons: string[] = [];
   if (!tab.known || !validIdentity(tab)) reasons.push("unknown-state");
@@ -31,9 +38,10 @@ export function observe(
   old: Observation | undefined,
   lock: Lock | undefined,
   now: number,
+  resolved?: Policy,
 ): Observation {
-  const { policy } = policyFor(config, tab);
-  const guarded = protectionReasons(tab, config, lock, now).length > 0;
+  const policy = resolved ?? policyFor(config, tab).policy;
+  const guarded = protectionReasons(tab, config, lock, now, policy).length > 0;
   const value: Observation = old
     ? { ...old }
     : {
@@ -65,7 +73,7 @@ export function evaluate(
   now: number,
 ): Decision {
   const { policy, rules } = policyFor(config, tab);
-  const reasons = protectionReasons(tab, config, lock, now);
+  const reasons = protectionReasons(tab, config, lock, now, policy);
   if (config.mode === "off") reasons.push("disabled");
   if (!inSchedule(config, now)) reasons.push("outside-schedule");
   if (!observation) reasons.push("unobserved");

@@ -1,3 +1,6 @@
 bun.lock
 coverage
 node_modules
+.artifacts
+.venv
+.ruff_cache

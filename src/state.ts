@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Config } from "./config";
-import type { Entry, Persisted } from "./model";
+import type { Entry, Persisted, Runtime } from "./model";
 
 const stateSchema = z.strictObject({
   version: z.literal(1),
@@ -32,6 +32,23 @@ export const initialState = (): Persisted => ({
 });
 export function validateState(state: unknown): Persisted {
   return stateSchema.parse(state);
+}
+export function validateRuntime(value: unknown): Runtime {
+  return z
+    .strictObject({
+      pauseUntil: z.number().finite().nonnegative().nullable(),
+      observations: z.record(
+        z.string(),
+        z.strictObject({
+          opened: z.number().finite().nonnegative(),
+          touched: z.number().finite().nonnegative(),
+          grace: z.number().finite().nonnegative(),
+          updated: z.number().finite().nonnegative(),
+          protected: z.boolean(),
+        }),
+      ),
+    })
+    .parse(value);
 }
 export function prune(entries: Entry[], config: Config, now: number): Entry[] {
   const cutoff = now - config.history.days * 86400000;
