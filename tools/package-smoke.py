@@ -147,7 +147,6 @@ subprocess.run(
     env=env,
     check=True,
 )
-print(f"PASS: packed plugin with production dependencies only: {installed}")
 subprocess.run(
     ["python3", str(repo / "tools/pty-smoke.py"), "--compat", "--package", str(installed)],
     cwd=repo,
@@ -161,3 +160,4 @@ if args.acceptance:
         env=env,
         check=True,
     )
+print(f"PASS: packed plugin with production dependencies only: {installed}")

@@ -18,6 +18,8 @@ import time
 import zlib
 from pathlib import Path
 
+from transport_control import DisconnectControl
+
 repo = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -249,7 +251,6 @@ draft_step_at = 0.0
 draft_capture = 0
 draft_marker = "WRANGLER_DRAFT_9D2"
 transport_stage = 0
-transport_key_at = 0.0
 attachment = project / "fixture.png"
 if args.lifecycle == "draft":
 
@@ -266,6 +267,7 @@ if args.lifecycle == "draft":
     )
 text = ""
 start = time.monotonic()
+disconnect_control = DisconnectControl()
 try:
     while time.monotonic() - start < 60:
         report = {}
@@ -326,16 +328,19 @@ try:
                     process, master = launch()
                     transport_stage = 1
             if args.lifecycle == "disconnect":
-                if report.get("phase") == "ready" and time.monotonic() >= transport_key_at:
-                    # Obtain a native keymap acknowledgement before pausing the backend;
-                    # fixture setup can precede the terminal's final startup barrier.
+                action = disconnect_control.advance(report.get("phase"), time.monotonic())
+                if action == "arm":
                     os.write(master, b"\x1b[19~")
-                    transport_key_at = time.monotonic() + 1
-                if report.get("phase") == "armed" and transport_stage == 0:
-                    os.killpg(backend.pid, signal.SIGSTOP)
+                elif action == "offline":
                     os.write(master, b"\x1b[20~")
+                elif action == "pause":
+                    os.killpg(backend.pid, signal.SIGSTOP)
+                    _, status = os.waitpid(backend.pid, os.WUNTRACED)
+                    if not os.WIFSTOPPED(status):
+                        raise RuntimeError("Private backend did not acknowledge suspension")
+                    disconnect_control.paused_at = time.monotonic()
                     transport_stage = 1
-                elif report.get("phase") == "offline-protected" and transport_stage == 1:
+                elif action == "resume":
                     state = json.loads(
                         (
                             root
@@ -345,7 +350,6 @@ try:
                     if state["corral"]:
                         raise RuntimeError("Disconnected backend admitted a close intent")
                     os.killpg(backend.pid, signal.SIGCONT)
-                    os.write(master, b"\x1b[19~")
                     transport_stage = 2
             if args.lifecycle == "draft":
                 now = time.monotonic()
@@ -510,6 +514,28 @@ try:
             passed = True
             break
     else:
+        phases = {
+            "starting",
+            "ready",
+            "armed",
+            "offline",
+            "offline-protected",
+            "recovering",
+            "after-restart",
+            "restoring",
+            "passed",
+            "failed",
+        }
+        print(
+            json.dumps(
+                {
+                    "scenario": args.lifecycle or "basic",
+                    "phase": report.get("phase") if report.get("phase") in phases else "other",
+                    "transportStage": transport_stage,
+                    "earlyProtected": report.get("earlyProtected") is True,
+                }
+            )
+        )
         raise RuntimeError("Timed out before live assertions completed")
     if not passed:
         raise RuntimeError("OpenCode exited before live assertions completed")

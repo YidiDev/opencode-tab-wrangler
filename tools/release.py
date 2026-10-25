@@ -88,7 +88,7 @@ def version_info(tag, version):
     match = VERSION.fullmatch(version)
     if not match or tag != f"v{version}":
         raise ValueError("Tag must exactly match a stable or rc.N package version")
-    return "next" if match[4] else "candidate"
+    return "next" if match[4] else "latest"
 
 
 def consumer_spec(archive, name, version, signatures=False):
@@ -187,8 +187,18 @@ def registry_version(version):
         raise
 
 
+def registry_tags():
+    with urllib.request.urlopen(f"{REGISTRY}/-/package/{NAME}/dist-tags", timeout=30) as response:
+        return json.load(response)
+
+
+def verify_channel(manifest):
+    if registry_tags().get(manifest["channel"]) != manifest["version"]:
+        raise RegistryNotVisible("Expected registry distribution tag is not visible")
+
+
 class RegistryNotVisible(ValueError):
-    """A metadata 404 after admission is not proof that publication failed."""
+    """Version/tag visibility after admission is not proof that publication failed."""
 
 
 def verify_registry(manifest, require_provenance=False):
@@ -219,7 +229,9 @@ def wait_for_registry(manifest, require_provenance=False, attempts=12, delay=5):
         raise ValueError("Registry visibility wait exceeds the reviewed read budget")
     for attempt in range(attempts):
         try:
-            return verify_registry(manifest, require_provenance)
+            content = verify_registry(manifest, require_provenance)
+            verify_channel(manifest)
+            return content
         except RegistryNotVisible:
             if attempt + 1 == attempts:
                 raise
@@ -232,7 +244,7 @@ def ensure_no_downgrade(version, latest):
         return  # npm's name-reservation placeholder is not an earlier stable release.
     if not target or target[4] or not current:
         raise ValueError(
-            "Stable promotion requires a stable target and a recognized current version"
+            "Stable publication requires a stable target and a recognized current version"
         )
     if tuple(map(int, target.group(1, 2, 3))) < tuple(map(int, current.group(1, 2, 3))):
         raise ValueError(
@@ -269,7 +281,7 @@ def checksum_file(directory, manifest):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "operation", choices=["validate-ref", "manifest", "publish", "fetch", "promote", "github"]
+        "operation", choices=["validate-ref", "manifest", "publish", "fetch", "github"]
     )
     parser.add_argument("--tag", default=os.environ.get("RELEASE_TAG"))
     parser.add_argument("--archive", type=Path)
@@ -321,10 +333,14 @@ def main():
     ).read_text() != checksum_file(directory, manifest):
         raise ValueError("Release inventory or checksums changed")
     version = manifest["version"]
-    if args.operation in {"publish", "promote", "github"}:
+    if args.operation in {"publish", "github"}:
         validate_context(tag, sha)
     if args.operation == "publish":
         if registry_version(version) is None:
+            if manifest["channel"] == "latest":
+                latest = registry_tags().get("latest")
+                if latest:
+                    ensure_no_downgrade(version, latest)
             run(
                 "npm",
                 "publish",
@@ -334,22 +350,14 @@ def main():
                 "--tag",
                 manifest["channel"],
                 "--ignore-scripts",
+                "--provenance",
                 f"--registry={REGISTRY}",
             )
-        wait_for_registry(manifest, require_provenance=manifest["channel"] == "candidate")
+        wait_for_registry(manifest, require_provenance=manifest["channel"] == "latest")
     elif args.operation == "fetch":
-        content = verify_registry(manifest, require_provenance=manifest["channel"] == "candidate")
+        content = verify_registry(manifest, require_provenance=manifest["channel"] == "latest")
+        verify_channel(manifest)
         (directory / "registry.tgz").write_bytes(content)
-    elif args.operation == "promote":
-        verify_registry(manifest, require_provenance=manifest["channel"] == "candidate")
-        if manifest["channel"] == "candidate":
-            with urllib.request.urlopen(
-                f"{REGISTRY}/-/package/{NAME}/dist-tags", timeout=30
-            ) as response:
-                latest = json.load(response).get("latest")
-            if latest:
-                ensure_no_downgrade(version, latest)
-            run("npm", "dist-tag", "add", f"{NAME}@{version}", "latest", f"--registry={REGISTRY}")
     elif args.operation == "github":
         # A draft gets every asset before publication; immutable published assets are never replaced.
         existing = run(
@@ -426,7 +434,7 @@ def main():
             REPOSITORY,
             "--draft=false",
             "--prerelease=" + str(manifest["channel"] == "next").lower(),
-            "--latest=" + str(manifest["channel"] == "candidate").lower(),
+            "--latest=" + str(manifest["channel"] == "latest").lower(),
         )
 
 

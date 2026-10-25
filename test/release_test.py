@@ -59,7 +59,7 @@ class ReleaseTests(unittest.TestCase):
         return release.inspect_archive(self.archive, "v1.0.0-rc.1", self.sha, self.files)
 
     def test_channels_and_exact_versions(self):
-        self.assertEqual(release.version_info("v1.0.0", "1.0.0"), "candidate")
+        self.assertEqual(release.version_info("v1.0.0", "1.0.0"), "latest")
         self.assertEqual(release.version_info("v1.0.0-rc.1", "1.0.0-rc.1"), "next")
         for tag, version in [
             ("v1", "1.0.0"),
@@ -226,6 +226,7 @@ class ReleaseTests(unittest.TestCase):
 
     def test_publication_visibility_wait_is_read_only_and_bounded(self):
         with (
+            patch.object(release, "verify_channel"),
             patch.object(
                 release, "verify_registry", side_effect=[release.RegistryNotVisible(), b"verified"]
             ) as verify,
@@ -258,6 +259,33 @@ class ReleaseTests(unittest.TestCase):
                 release.wait_for_registry({})
             verify.assert_called_once()
             sleep.assert_not_called()
+
+    def test_tag_visibility_is_verified_without_any_retag_mutation(self):
+        manifest = {"channel": "latest", "version": "1.0.0"}
+        with (
+            patch.object(release, "verify_registry", return_value=b"verified"),
+            patch.object(
+                release,
+                "registry_tags",
+                side_effect=[{"latest": "1.0.0-rc.2"}, {"latest": "1.0.0"}],
+            ) as tags,
+            patch.object(release.time, "sleep") as sleep,
+            patch.object(release, "run") as effect,
+        ):
+            self.assertEqual(release.wait_for_registry(manifest), b"verified")
+            self.assertEqual(tags.call_count, 2)
+            sleep.assert_called_once_with(5)
+            effect.assert_not_called()
+
+    def test_registry_fetch_wrong_tag_never_records_success_or_retags(self):
+        with (
+            self.operation("fetch") as (calls, _, _, _, directory),
+            patch.object(release, "registry_tags", return_value={"next": "2.0.0-rc.1"}),
+        ):
+            with self.assertRaises(release.RegistryNotVisible):
+                release.main()
+            self.assertFalse((directory / "registry.tgz").exists())
+            self.assertFalse(any(c[0] == "npm" for c in calls))
 
     def test_visibility_wait_rejects_unbounded_or_empty_budgets(self):
         for attempts, delay in [(0, 5), (13, 5), (3, -1), (3, 6)]:
@@ -358,6 +386,9 @@ class ReleaseTests(unittest.TestCase):
             patch.object(release, "validate_context") as context,
             patch.object(release, "verify_registry", return_value=b"fixture") as verify,
             patch.object(release, "registry_version", return_value=None) as registry,
+            patch.object(
+                release, "registry_tags", return_value={"latest": version, "next": version}
+            ),
         ):
             yield calls, context, verify, registry, directory
 
@@ -432,18 +463,30 @@ class ReleaseTests(unittest.TestCase):
             verify.assert_called_once()
             self.assertFalse((directory / "registry.tgz").exists())
 
-    def test_rc_never_promotes_latest(self):
-        with self.operation("promote") as (calls, _, verify, _, _):
+    def test_rc_publishes_next_without_retagging_latest(self):
+        with self.operation("publish") as (calls, _, verify, _, _):
             release.main()
             verify.assert_called_once()
-            self.assertFalse(any(c[0] == "npm" for c in calls))
+            effects = [c for c in calls if c[0] == "npm"]
+            self.assertEqual(len(effects), 1)
+            self.assertEqual(effects[0][effects[0].index("--tag") + 1], "next")
+            self.assertFalse(any("dist-tag" in c for c in calls))
 
-    def test_stable_promotion_refuses_downgrade(self):
+    def test_stable_publishes_directly_to_latest_with_publish_permission_only(self):
+        with self.operation("publish", version="1.0.0") as (calls, _, verify, _, _):
+            release.main()
+            effects = [c for c in calls if c[0] == "npm"]
+            self.assertEqual(len(effects), 1)
+            self.assertEqual(effects[0][1], "publish")
+            self.assertEqual(effects[0][effects[0].index("--tag") + 1], "latest")
+            self.assertIn("--provenance", effects[0])
+            self.assertFalse(any("dist-tag" in c for c in calls))
+            verify.assert_called_once()
+
+    def test_stable_publication_refuses_downgrade_before_any_mutation(self):
         with (
-            self.operation("promote", version="1.0.0") as (calls, _, _, _, _),
-            patch.object(
-                release.urllib.request, "urlopen", return_value=io.BytesIO(b'{"latest":"2.0.0"}')
-            ),
+            self.operation("publish", version="1.0.0") as (calls, _, _, _, _),
+            patch.object(release, "registry_tags", return_value={"latest": "2.0.0"}),
         ):
             with self.assertRaisesRegex(ValueError, "downgrade"):
                 release.main()

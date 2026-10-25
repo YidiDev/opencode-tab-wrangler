@@ -29,6 +29,8 @@ No internal host renderable traversal, filesystem access, monkey patches, or ser
 
 `bun run test:acceptance` runs nine actual native scenarios: queued work in global/cwd layouts, disabled tabs, plugin owner replacement, unsent text/PNG close-and-restore, full private CLI/server restart, private backend disconnection/reconnection, and two competing owners in both global and distinct cwd groups. Reload/restart/reconnection grace is six seconds, exceeding the first five-second cleanup tick. Drafts are cleared locally afterward and inbox/messages must remain empty. Competing owners prove acknowledgement gating and recovery, not other-client selection safety or exactly-once closure. Each scenario has bounded waits and owns its HOME/XDG, sessions, authenticated backend, and process groups. Only a sanitized runtime-hash summary is uploaded; no terminal/server logs or session IDs.
 
+Disconnect control waits for native key acknowledgements before suspending its idle backend. It measures at least 11.5 seconds from confirmed process suspension, verifies no close intent, then resumes the backend; a fresh public session read acknowledges recovery without relying on keyboard delivery during reconnection. Unit regressions cover lost key acknowledgements and delayed suspension. Timeout diagnostics contain only scenario/phase enums and booleans, never session IDs or transcript content.
+
 `bun run test:package` checks the archive allowlist, installs strict production-only dependencies outside the checkout, and runs the full matrix against those installed bytes. Registry verification additionally binds installed files/lock integrity and checks signatures. This prevents fallback to development node_modules.
 
 ### Owner-only running descendant

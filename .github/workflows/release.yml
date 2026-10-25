@@ -136,34 +136,8 @@ jobs:
       - run: python3 tools/package-smoke.py --archive .artifacts/release/registry.tgz --signatures --acceptance
       - name: Exercise the actual npm-spec plugin resolver
         run: python3 tools/pty-smoke.py --cleanup --spec "opencode-tab-wrangler@${RELEASE_TAG#v}"
-  promote:
-    needs: registry-verify
-    environment: npm
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ env.RELEASE_TAG }}
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: "24.22.1"
-          package-manager-cache: false
-      - run: npm install --global npm@12.2.1 --ignore-scripts
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          name: verified-release
-          path: .artifacts/release
-      - run: python3 tools/release.py promote
-        env:
-          GH_TOKEN: ${{ github.token }}
   github:
-    needs: promote
+    needs: registry-verify
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

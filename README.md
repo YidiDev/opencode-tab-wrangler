@@ -315,6 +315,8 @@ CI runs installed-package/live tests, TypeScript and Python linting, schema pari
 
 Release verification installs the exact registry version, binds its lockfile integrity and installed files to the tested archive, and checks registry signatures/provenance for the package itself as well as dependencies. Version tags cannot be moved/deleted, and release publication requires maintainer approval. This is single-maintainer authorization, not a claim of independent two-person review. See [release operations](RELEASING.md).
 
+Fresh stable releases publish the tested archive directly with `npm publish --tag latest` through the configured trusted publisher; RCs use `next`. Post-publication checks are read-only and gate GitHub finalization. Normal releases do not retag existing npm versions or require separate dist-tag-management permission.
+
 See [Contributing](CONTRIBUTING.md), [Security](SECURITY.md), [Code of conduct](CODE_OF_CONDUCT.md), [Changelog](CHANGELOG.md), and [Releasing](RELEASING.md). Explicit version-tag releases publish through OIDC only after verification and approval. Automation never changes repository visibility. Dependency-update configurations are supplied; Renovate still requires its GitHub app to be authorized.
 
 See [`DEVELOPMENT.md`](DEVELOPMENT.md) for the live smoke test, known limits, and release checklist. To disable, remove the CLI plugin entry or set mode `off`; no database cleanup or session deletion is necessary. Removing the entry does not erase the host's stored plugin preferences/history.
