@@ -15,6 +15,9 @@
 
 ## Unreleased
 
+- Handle successful publication followed by delayed registry visibility with bounded read-only verification, never automatic republishing.
+- Permit future stable promotion over a recognized bootstrap RC while retaining downgrade and readiness protections; document the observed npm latest-tag caveat.
+
 - Verify the published package's own registry signature/provenance through an exact registry install; bind installed bytes and lockfile integrity to the tested archive.
 - Stabilize native unread fixtures by selecting a non-unread tab before importing/opening unread fixtures and waiting for admitted tabs to be observed.
 

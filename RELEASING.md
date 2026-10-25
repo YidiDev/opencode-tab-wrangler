@@ -56,7 +56,7 @@ silent activation, shared-layout acknowledgement, or server-namespace assignment
    stable versions to `candidate`. Project dependency/build code never runs in the publisher.
 6. A separate read-only job verifies registry bytes, installs the exact registry version with strict npm peer resolution (not a file: install, which npm's signature verifier skips),
    runs isolated live tests, and tests OpenCode's actual exact-version npm plugin resolver.
-7. Only after those pass can OIDC promote a stable version to `latest`. RCs never move latest.
+7. Only after those pass can OIDC explicitly promote a stable version to `latest`. The workflow never explicitly promotes an RC to latest. However, the first real publication over npm's reservation placeholder assigned latest to the RC despite `--tag next`; npm rejected authenticated deletion with HTTP 400. The owner accepted this bootstrap caveat. Until stable is ready, use the exact RC version or `@next` and do not interpret npm's latest tag as stable certification. Do not restore the unusable placeholder or bypass stable readiness gates.
    The GitHub release is created as a draft with all assets, then published immutable.
 
 Stable 1.0.0 is machine-blocked by `release-readiness.json` until the broader live compatibility matrix in DEVELOPMENT.md has
@@ -74,8 +74,9 @@ drift does not rewrite the release inventory. It is revalidated against the tag 
 If the artifact has expired, recover the original bytes/metadata from the release or inspect
 the situation manually; never substitute new bytes for an already published version.
 An existing identical npm version is verified and reused; different bytes stop the release.
-Registry/network ambiguity never triggers an automatic publish retry. A failed registry smoke
-leaves latest unchanged. A partially uploaded draft requires inspection; assets are never clobbered.
+After a successful publish response, metadata 404s receive at most 12 read-only verification attempts with five-second intervals (each request also has its own timeout). Integrity mismatches and other errors stop immediately. These reads never repeat `npm publish`. If visibility remains uncertain, inspect the registry before an owner resumes the failed run; an already-visible matching version is verified, not republished.
+
+Registry/network ambiguity never triggers an automatic publish retry. A failed registry smoke prevents workflow promotion, but cannot undo npm's bootstrap tag assignment. Stable promotion can replace a recognized RC at the same or lower base version; it still rejects older stable targets, unknown current versions, and RC targets. A partially uploaded draft requires inspection; assets are never clobbered.
 
 If a stable release is faulty, an authenticated owner can move latest to a previously verified
 version, deprecate the faulty version, and publish a patch. OIDC does not authorize npm deprecate;

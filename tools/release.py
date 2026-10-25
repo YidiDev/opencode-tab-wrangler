@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import tarfile
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -166,10 +167,16 @@ def registry_version(version):
         raise
 
 
+class RegistryNotVisible(ValueError):
+    """A metadata 404 after admission is not proof that publication failed."""
+
+
 def verify_registry(manifest, require_provenance=False):
     data = registry_version(manifest["version"])
-    if data is None or data.get("dist", {}).get("integrity") != manifest["integrity"]:
-        raise ValueError("Registry version is missing or has different integrity")
+    if data is None:
+        raise RegistryNotVisible("Registry version is not yet visible")
+    if data.get("dist", {}).get("integrity") != manifest["integrity"]:
+        raise ValueError("Registry version has different integrity")
     url = data["dist"]["tarball"]
     if not url.startswith(f"{REGISTRY}/{NAME}/-/"):
         raise ValueError("Unexpected registry tarball URL")
@@ -186,12 +193,27 @@ def verify_registry(manifest, require_provenance=False):
     return content
 
 
+def wait_for_registry(manifest, require_provenance=False, attempts=12, delay=5):
+    """Only repeat bounded metadata reads after a successful publish; never repeat a write."""
+    if not 1 <= attempts <= 12 or not 0 <= delay <= 5:
+        raise ValueError("Registry visibility wait exceeds the reviewed read budget")
+    for attempt in range(attempts):
+        try:
+            return verify_registry(manifest, require_provenance)
+        except RegistryNotVisible:
+            if attempt + 1 == attempts:
+                raise
+            time.sleep(delay)
+
+
 def ensure_no_downgrade(version, latest):
     target, current = VERSION.fullmatch(version), VERSION.fullmatch(latest)
     if target and not target[4] and latest == "0.0.0-stage":
         return  # npm's name-reservation placeholder is not an earlier stable release.
-    if not target or target[4] or not current or current[4]:
-        raise ValueError("Stable promotion requires stable versions")
+    if not target or target[4] or not current:
+        raise ValueError(
+            "Stable promotion requires a stable target and a recognized current version"
+        )
     if tuple(map(int, target.group(1, 2, 3))) < tuple(map(int, current.group(1, 2, 3))):
         raise ValueError(
             "Refusing to downgrade latest; use the documented owner recovery procedure"
@@ -292,7 +314,7 @@ def main():
                 "--ignore-scripts",
                 f"--registry={REGISTRY}",
             )
-        verify_registry(manifest, require_provenance=manifest["channel"] == "candidate")
+        wait_for_registry(manifest, require_provenance=manifest["channel"] == "candidate")
     elif args.operation == "fetch":
         content = verify_registry(manifest, require_provenance=manifest["channel"] == "candidate")
         (directory / "registry.tgz").write_bytes(content)
