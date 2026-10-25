@@ -70,6 +70,25 @@ def version_info(tag, version):
     return "next" if match[4] else "candidate"
 
 
+def consumer_spec(archive, name, version, signatures=False):
+    if name != NAME or not VERSION.fullmatch(version):
+        raise ValueError("Unexpected consumer package identity")
+    # A file: install is skipped by npm's registry signature verifier. Use the exact
+    # registry spec after publication so our own package's provenance is verified too.
+    return f"{name}@{version}" if signatures else str(archive)
+
+
+def verify_consumer(lock, archive, version, signatures=False):
+    entry = lock.get("packages", {}).get(f"node_modules/{NAME}", {})
+    integrity = (
+        "sha512-" + base64.b64encode(hashlib.sha512(Path(archive).read_bytes()).digest()).decode()
+    )
+    if entry.get("version") != version or entry.get("integrity") != integrity:
+        raise ValueError("Installed consumer differs from the verified archive")
+    if signatures and not entry.get("resolved", "").startswith(f"{REGISTRY}/{NAME}/-/"):
+        raise ValueError("Signature verification requires our registry-resolved package")
+
+
 def inspect_archive(archive, tag, commit, expected=None):
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("Expected an exact commit SHA")

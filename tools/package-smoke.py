@@ -9,6 +9,8 @@ import tarfile
 import time
 from pathlib import Path
 
+from release import consumer_spec, verify_consumer
+
 repo = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -75,7 +77,8 @@ subprocess.run(
         "--strict-peer-deps",
         "--no-audit",
         "--no-fund",
-        str(archive),
+        consumer_spec(archive, manifest["name"], manifest["version"], args.signatures),
+        "--registry=https://registry.npmjs.org/",
     ],
     cwd=root,
     env=env,
@@ -84,8 +87,13 @@ subprocess.run(
 installed = root / "node_modules" / manifest["name"]
 if not installed.is_dir():
     raise RuntimeError("Strict npm consumer install did not produce the package")
+for name in expected:
+    relative = name.removeprefix("package/")
+    if (installed / relative).read_bytes() != (package / relative).read_bytes():
+        raise RuntimeError("Consumer installation differs from the verified archive")
 inventory = []
 lock = json.loads((root / "package-lock.json").read_text())
+verify_consumer(lock, archive, manifest["version"], args.signatures)
 for path in sorted(lock["packages"]):
     if not path:
         continue
@@ -115,9 +123,19 @@ evidence.mkdir(parents=True, exist_ok=True)
     )
     + "\n"
 )
-subprocess.run(["npm", "audit", "--omit=dev"], cwd=root, env=env, check=True)
+subprocess.run(
+    ["npm", "audit", "--omit=dev", "--registry=https://registry.npmjs.org/"],
+    cwd=root,
+    env=env,
+    check=True,
+)
 if args.signatures:
-    subprocess.run(["npm", "audit", "signatures"], cwd=root, env=env, check=True)
+    subprocess.run(
+        ["npm", "audit", "signatures", "--registry=https://registry.npmjs.org/"],
+        cwd=root,
+        env=env,
+        check=True,
+    )
 subprocess.run(
     ["python3", str(repo / "tools/pty-smoke.py"), "--cleanup", "--package", str(installed)],
     cwd=repo,

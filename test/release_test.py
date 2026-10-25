@@ -71,6 +71,39 @@ class ReleaseTests(unittest.TestCase):
             with self.subTest(tag=tag), self.assertRaises(ValueError):
                 release.version_info(tag, version)
 
+    def test_signature_verification_uses_registry_spec_not_file_install(self):
+        self.assertEqual(
+            release.consumer_spec("fixture.tgz", release.NAME, "1.0.0-rc.2"), "fixture.tgz"
+        )
+        self.assertEqual(
+            release.consumer_spec("fixture.tgz", release.NAME, "1.0.0-rc.2", True),
+            "opencode-tab-wrangler@1.0.0-rc.2",
+        )
+        with self.assertRaises(ValueError):
+            release.consumer_spec("fixture.tgz", "another-package", "1.0.0", True)
+
+    def test_consumer_lock_binds_the_verified_archive_and_registry(self):
+        manifest = self.inspect()
+        entry = {
+            "version": self.pkg["version"],
+            "integrity": manifest["integrity"],
+            "resolved": f"{release.REGISTRY}/{release.NAME}/-/fixture.tgz",
+        }
+        lock = {"packages": {f"node_modules/{release.NAME}": entry}}
+        release.verify_consumer(lock, self.archive, self.pkg["version"], True)
+        for field, value in [
+            ("version", "9.0.0"),
+            ("integrity", "sha512-wrong"),
+            ("resolved", "file:fixture.tgz"),
+        ]:
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                release.verify_consumer(
+                    {"packages": {f"node_modules/{release.NAME}": {**entry, field: value}}},
+                    self.archive,
+                    self.pkg["version"],
+                    True,
+                )
+
     def test_stable_requires_explicit_complete_evidence(self):
         release.check_stable_readiness("1.0.0-rc.2", {})
         with self.assertRaises(ValueError):

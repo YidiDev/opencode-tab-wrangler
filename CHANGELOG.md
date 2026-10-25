@@ -15,6 +15,9 @@
 
 ## Unreleased
 
+- Verify the published package's own registry signature/provenance through an exact registry install; bind installed bytes and lockfile integrity to the tested archive.
+- Stabilize native unread fixtures by selecting a non-unread tab before importing/opening unread fixtures and waiting for admitted tabs to be observed.
+
 - Centralize gap detection across manual cleanup, observations, refreshes, and asynchronous waits; distinguish intentional batch delay from suspension/oversleep.
 - Retain meaningful protection transitions during cleanup without letting private hydration starve eligible tabs.
 - Reject stale rule edits using transactional array/namespace comparisons, including one-click exclusions.

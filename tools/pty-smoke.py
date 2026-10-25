@@ -134,6 +134,16 @@ try:
         if args.cleanup and results.exists():
             report = json.loads(results.read_text())
             if report.get("phase") == "failed":
+                if args.compat:
+                    print(
+                        json.dumps(
+                            {
+                                "scenario": "native-unread",
+                                "activity": report.get("nativeActivity"),
+                                "error": report.get("nativeError"),
+                            }
+                        )
+                    )
                 raise RuntimeError("Live cleanup probe failed")
         if process.poll() is not None:
             break
