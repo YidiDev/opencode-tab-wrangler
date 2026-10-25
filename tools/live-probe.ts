@@ -1,4 +1,4 @@
-// Loaded ONLY by the explicitly invoked isolated live test. Creates disposable sessions, no model prompts.
+// Loaded ONLY by isolated tests. All queued input explicitly uses resume:false: no generation.
 import type { Plugin } from "@opencode/plugin/tui";
 import type { SessionInfo } from "@opencode/client";
 
@@ -72,6 +72,24 @@ export default {
       parentID: selected.id,
       location: { directory: `${location.directory}/child` },
     });
+    const queued = await context.client.session.create({
+      title: "fixture-queued-root",
+      location,
+    });
+    sessions.push(queued);
+    const queuedChild = await context.client.session.create({
+      title: "fixture-queued-child",
+      parentID: queued.id,
+      location: { directory: `${location.directory}/child` },
+    });
+    // Public 2.1.4 Session.prompt admits a real user inbox item, but only wakes execution
+    // when resume !== false. Do not remove this explicit no-generation safeguard.
+    const queuedItem = await context.client.session.prompt({
+      sessionID: queuedChild.id,
+      text: "Disposable queued fixture work; never execute",
+      delivery: "queue",
+      resume: false,
+    });
     await context.client.session.form.create({
       sessionID: child.id,
       title: "Fixture waiting question",
@@ -85,7 +103,8 @@ export default {
       type: "session",
       sessionID: selectedChild.id,
     });
-    let restoring = false,
+    let observed = false,
+      restoring = false,
       finished = false,
       checking = false;
     await save((draft) => {
@@ -98,6 +117,12 @@ export default {
       try {
         const tabs = context.ui.tabs.list(),
           ids = tabs.map((t) => t.sessionID);
+        if (!observed) {
+          observed = sessions.every((s) => ids.includes(s.id));
+          return;
+        }
+        if (!ids.includes(queued.id))
+          throw new Error("Queued descendant root was closed");
         if (
           !restoring &&
           idle.every((s) => !ids.includes(s.id)) &&
@@ -105,12 +130,26 @@ export default {
           ids.includes(permission.id) &&
           ids.includes(selected.id)
         ) {
-          for (const session of [...sessions, child, selectedChild])
+          for (const session of [
+            ...sessions,
+            child,
+            selectedChild,
+            queuedChild,
+          ])
             await context.client.session.get({ sessionID: session.id });
           const forms = await context.client.session.form.list({
             sessionID: child.id,
           });
           if (!forms.length) throw new Error("Waiting question lost");
+          const inbox = await context.client.session.inbox.list({
+            sessionID: queuedChild.id,
+          });
+          if (
+            !inbox.some(
+              (item) => item.id === queuedItem.id && item.type === "user",
+            )
+          )
+            throw new Error("Queued user input was lost or executed");
           if (
             !(
               await context.client.permission.list({ sessionID: permission.id })
@@ -126,6 +165,7 @@ export default {
             draft.selectedProtected = true;
             draft.permissionProtected = true;
             draft.parkedContextDidNotBlockCleanup = true;
+            draft.queuedDescendantProtected = true;
           });
           context.keymap.dispatch("wrangler.restore");
         } else if (restoring && idle.some((s) => ids.includes(s.id))) {

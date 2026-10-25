@@ -55,3 +55,21 @@ test("README configuration examples stay valid", async () => {
     } else expect(() => optionsSchema.parse(value)).not.toThrow();
   }
 });
+test("automated queued fixture cannot wake generation", async () => {
+  const fixture = await Bun.file("tools/live-probe.ts").text();
+  const calls = [...fixture.matchAll(/\.session\.prompt\(\{([\s\S]*?)\}\)/g)];
+  expect(calls).toHaveLength(1);
+  expect(calls[0][1]).toContain("resume: false");
+  for (const name of [
+    "running",
+    "draft",
+    "lifecycle",
+    "transport",
+    "competing",
+  ]) {
+    const source = await Bun.file(`tools/${name}-probe.ts`).text();
+    expect(source).not.toMatch(
+      /\.session\.(prompt|generate|interrupt|remove)\(/,
+    );
+  }
+});
