@@ -40,6 +40,26 @@ REQUIREMENTS = {
 }
 
 
+def check_running_evidence(root):
+    record = json.loads((root / "test/evidence/running-descendants.json").read_text())
+    digest = hashlib.sha256()
+    for path in [root / "tui.ts", *sorted((root / "src").glob("*.ts*"))]:
+        content = path.read_bytes()
+        digest.update(path.relative_to(root).as_posix().encode() + b"\0")
+        digest.update(len(content).to_bytes(8, "big") + content)
+    if (
+        record.get("scenario") != "running-descendants"
+        or record.get("status") != "passed"
+        or record.get("host") != "2.1.4"
+        or record.get("platform") != "linux-x64"
+        or record.get("ownerSubmitted") is not True
+        or record.get("protectedDuringEligibleIdleCleanup") is not True
+        or record.get("completedParentClosedAndRestored") is not True
+        or record.get("runtimeSha256") != digest.hexdigest()
+    ):
+        raise ValueError("Owner-run running evidence does not match this runtime")
+
+
 def check_stable_readiness(version, policy):
     if VERSION.fullmatch(version) and "-rc." in version:
         return
@@ -260,6 +280,8 @@ def main():
     pkg = json.loads(Path("package.json").read_text())
     version_info(tag, pkg["version"])
     check_stable_readiness(pkg["version"], json.loads(Path("release-readiness.json").read_text()))
+    if "-rc." not in pkg["version"]:
+        check_running_evidence(Path.cwd())
     sha = run("git", "rev-parse", "HEAD", capture=True)
     if args.operation == "validate-ref":
         validate_context(tag, sha)

@@ -295,6 +295,29 @@ class ReleaseTests(unittest.TestCase):
         (directory / "SHA256SUMS").write_text(release.checksum_file(directory, manifest))
         (root / "package.json").write_bytes(self.files["package.json"])
         (root / "CHANGELOG.md").write_bytes(self.files["CHANGELOG.md"])
+        (root / "tui.ts").write_bytes(self.files["tui.ts"])
+        (root / "src").mkdir(exist_ok=True)
+        (root / "src/tui.tsx").write_bytes(self.files["src/tui.tsx"])
+        digest = hashlib.sha256()
+        for path in [root / "tui.ts", root / "src/tui.tsx"]:
+            content = path.read_bytes()
+            digest.update(path.relative_to(root).as_posix().encode() + b"\0")
+            digest.update(len(content).to_bytes(8, "big") + content)
+        (root / "test/evidence").mkdir(parents=True, exist_ok=True)
+        (root / "test/evidence/running-descendants.json").write_text(
+            json.dumps(
+                {
+                    "scenario": "running-descendants",
+                    "status": "passed",
+                    "host": "2.1.4",
+                    "platform": "linux-x64",
+                    "runtimeSha256": digest.hexdigest(),
+                    "ownerSubmitted": True,
+                    "protectedDuringEligibleIdleCleanup": True,
+                    "completedParentClosedAndRestored": True,
+                }
+            )
+        )
         (root / "release-readiness.json").write_text(
             json.dumps(
                 {
@@ -347,6 +370,25 @@ class ReleaseTests(unittest.TestCase):
             self.assertIn("next", effects[0])
             context.assert_called_once()
             verify.assert_called_once()
+
+    def test_owner_running_evidence_must_match_runtime_and_real_assertions(self):
+        root, _ = self.operation_fixture("1.0.0")
+        release.check_running_evidence(root)
+        record_path = root / "test/evidence/running-descendants.json"
+        record = json.loads(record_path.read_text())
+        for key, value in [
+            ("ownerSubmitted", False),
+            ("status", "setup-only"),
+            ("protectedDuringEligibleIdleCleanup", False),
+            ("completedParentClosedAndRestored", False),
+        ]:
+            record_path.write_text(json.dumps({**record, key: value}))
+            with self.assertRaises(ValueError):
+                release.check_running_evidence(root)
+        record_path.write_text(json.dumps(record))
+        (root / "src/tui.tsx").write_text("changed runtime")
+        with self.assertRaises(ValueError):
+            release.check_running_evidence(root)
 
     def test_ambiguous_publish_failure_is_never_retried(self):
         with self.operation("publish", npm_failure=True) as (calls, _, verify, _, _):

@@ -58,7 +58,9 @@
     "schema:check": "bun tools/schema.ts --check",
     "test:live": "python3 tools/pty-smoke.py --cleanup",
     "test:compat": "python3 tools/pty-smoke.py --compat",
-    "test:package": "python3 tools/package-smoke.py",
+    "test:acceptance": "python3 tools/acceptance.py",
+    "test:running:owner": "python3 tools/manual-running.py",
+    "test:package": "python3 tools/package-smoke.py --acceptance",
     "test:coverage": "bun test --preload ./test/coverage-preload.ts --coverage --coverage-reporter=text --coverage-reporter=lcov && bun tools/coverage.ts"
   },
   "peerDependencies": {

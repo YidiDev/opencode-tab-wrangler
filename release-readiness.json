@@ -6,14 +6,26 @@
       "status": "passed",
       "evidence": "tools/compat-probe.ts via test:compat: native activity/error tabs retained while idle tab closes; imported empty sessions, no generation; OpenCode 2.1.4 Linux x64"
     },
-    "executable-queued-work": { "status": "pending", "evidence": "" },
+    "executable-queued-work": {
+      "status": "passed",
+      "evidence": "tools/live-probe.ts via native acceptance queued-global/queued-cwd: actual non-synthetic child inbox work admitted with resume:false stays queued, parent remains open while three idle roots close; all ten sessions intact; no generation"
+    },
     "running-descendants": { "status": "pending", "evidence": "" },
-    "drafts-and-attachments": { "status": "pending", "evidence": "" },
-    "disconnect-restart-reload": { "status": "pending", "evidence": "" },
-    "tab-scopes-and-disabled-tabs": { "status": "pending", "evidence": "" },
+    "drafts-and-attachments": {
+      "status": "passed",
+      "evidence": "tools/draft-probe.ts + PTY draft scenario: bracketed-pasted PNG and unsent text survive actual auto-close/restore; image command enabled before/after, text reappears after restoration; then local clear, inbox/messages empty"
+    },
+    "disconnect-restart-reload": {
+      "status": "passed",
+      "evidence": "tools/lifecycle-probe.ts and transport-probe.ts: actual owner replacement, full private CLI/server restart with durable corral recovery, and paused private backend through two refresh deadlines; protected while offline, six-second grace exceeding first cleanup tick, eventual closure/restore"
+    },
+    "tab-scopes-and-disabled-tabs": {
+      "status": "passed",
+      "evidence": "Native global/cwd matrix; two owners in distinct cwd groups assert other group invisible. Native tabs disabled rejects open and produces no corral intents through two cleanup periods"
+    },
     "competing-clients-acknowledged-limitations": {
-      "status": "pending",
-      "evidence": ""
+      "status": "passed",
+      "evidence": "tools/competing-probe.ts: two actual CLI owners sharing one private authenticated backend/global state, both global and separate cwd layouts; acknowledgement:false prevents cleanup, then acknowledgement:true allows idle cleanup/recovery. Other-client selection is explicitly invisible; keeper roots excluded. No atomic conditional-close or exactly-once guarantee claimed"
     }
   }
 }

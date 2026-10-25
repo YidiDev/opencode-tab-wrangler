@@ -133,7 +133,7 @@ jobs:
           path: .artifacts/release
       - run: python3 tools/release.py fetch
       - run: python3 tools/install-host.py >> "$GITHUB_PATH"
-      - run: python3 tools/package-smoke.py --archive .artifacts/release/registry.tgz --signatures
+      - run: python3 tools/package-smoke.py --archive .artifacts/release/registry.tgz --signatures --acceptance
       - name: Exercise the actual npm-spec plugin resolver
         run: python3 tools/pty-smoke.py --cleanup --spec "opencode-tab-wrangler@${RELEASE_TAG#v}"
   promote:

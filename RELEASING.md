@@ -64,6 +64,10 @@ evidence, including native unread/errors, executable queues, running descendants
 attachments, reload/disconnection, tab scopes and competing clients. Public RCs remain clearly
 labelled prereleases; no claim of cross-terminal selected-tab safety is made.
 
+The production-only package test runs the nine native acceptance scenarios described in DEVELOPMENT.md. The remaining real-running gate is owner initiated: run `bun run test:running:owner` in your own terminal, press Enter when the isolated fixture asks, and review its sanitized `evidence.json` and runtime hash. Agents/CI must only use `--setup-only`, which requires zero inference requests and cannot count as passing running evidence. Do not change the pending record or tag stable until the genuine owner-run result passes.
+
+After review, commit only the sanitized passing record as `test/evidence/running-descendants.json` and update the readiness record. Stable release tooling checks its assertions and fingerprint against the current runtime source; changed runtime code requires a fresh owner-run result. Package version/documentation changes alone do not invalidate the runtime fingerprint. Never commit private session IDs, prompts, terminal logs, or authentication material.
+
 ## Recovery
 
 There is no atomic transaction spanning npm and GitHub. Never overwrite a version or move a tag.

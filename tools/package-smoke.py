@@ -21,6 +21,11 @@ parser.add_argument(
     action="store_true",
     help="Verify registry signatures/provenance after publication",
 )
+parser.add_argument(
+    "--acceptance",
+    action="store_true",
+    help="Exercise the full native matrix against these installed package bytes",
+)
 args = parser.parse_args()
 if not args.archive:
     subprocess.run(["bun", "pm", "pack"], cwd=repo, check=True)
@@ -149,3 +154,10 @@ subprocess.run(
     env=env,
     check=True,
 )
+if args.acceptance:
+    subprocess.run(
+        ["python3", str(repo / "tools/acceptance.py"), "--package", str(installed)],
+        cwd=repo,
+        env=env,
+        check=True,
+    )

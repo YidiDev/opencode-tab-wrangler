@@ -65,6 +65,7 @@ jobs:
           path: |
             opencode-tab-wrangler-*.tgz
             .artifacts/release/runtime-dependencies.json
+            .artifacts/release/native-acceptance.json
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
