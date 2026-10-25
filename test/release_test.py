@@ -157,7 +157,7 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.inspect()
 
-    def test_registry_only_404_means_unpublished(self):
+    def test_registry_only_404_means_not_visible(self):
         for status in [404, 403, 500]:
             with patch.object(
                 release.urllib.request,
@@ -172,6 +172,11 @@ class ReleaseTests(unittest.TestCase):
 
     def test_registry_integrity_and_provenance(self):
         manifest = self.inspect()
+        with (
+            patch.object(release, "registry_version", return_value=None),
+            self.assertRaises(release.RegistryNotVisible),
+        ):
+            release.verify_registry(manifest)
         data = {
             "dist": {
                 "integrity": manifest["integrity"],
@@ -208,9 +213,56 @@ class ReleaseTests(unittest.TestCase):
         release.ensure_no_downgrade("1.10.0", "1.9.9")
         release.ensure_no_downgrade("1.0.0", "0.0.0-stage")
         release.ensure_no_downgrade("1.0.0", "1.0.0")
+        release.ensure_no_downgrade("1.0.0", "1.0.0-rc.2")
+        release.ensure_no_downgrade("2.0.0", "1.0.0-rc.2")
         for version, latest in [("1.0.0", "2.0.0"), ("1.0.0-rc.1", "1.0.0"), ("evil", "1.0.0")]:
             with self.assertRaises(ValueError):
                 release.ensure_no_downgrade(version, latest)
+
+    def test_bootstrap_rc_cannot_authorize_a_lower_stable_target(self):
+        for target, current in [("1.0.0", "2.0.0-rc.1"), ("1.0.0", "unknown")]:
+            with self.subTest(current=current), self.assertRaises(ValueError):
+                release.ensure_no_downgrade(target, current)
+
+    def test_publication_visibility_wait_is_read_only_and_bounded(self):
+        with (
+            patch.object(
+                release, "verify_registry", side_effect=[release.RegistryNotVisible(), b"verified"]
+            ) as verify,
+            patch.object(release.time, "sleep") as sleep,
+        ):
+            self.assertEqual(release.wait_for_registry({}, attempts=3), b"verified")
+            self.assertEqual(verify.call_count, 2)
+            sleep.assert_called_once_with(5)
+        with (
+            patch.object(
+                release, "verify_registry", side_effect=release.RegistryNotVisible()
+            ) as verify,
+            patch.object(release.time, "sleep") as sleep,
+            self.assertRaises(release.RegistryNotVisible),
+        ):
+            release.wait_for_registry({}, attempts=3)
+        self.assertEqual(verify.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_visibility_wait_never_retries_integrity_or_unknown_failures(self):
+        for error in [
+            ValueError("different integrity"),
+            urllib.error.HTTPError("url", 503, "test", {}, None),
+        ]:
+            with (
+                patch.object(release, "verify_registry", side_effect=error) as verify,
+                patch.object(release.time, "sleep") as sleep,
+                self.assertRaises(type(error)),
+            ):
+                release.wait_for_registry({})
+            verify.assert_called_once()
+            sleep.assert_not_called()
+
+    def test_visibility_wait_rejects_unbounded_or_empty_budgets(self):
+        for attempts, delay in [(0, 5), (13, 5), (3, -1), (3, 6)]:
+            with self.subTest(attempts=attempts, delay=delay), self.assertRaises(ValueError):
+                release.wait_for_registry({}, attempts=attempts, delay=delay)
 
     def test_context_rejects_forks(self):
         with (
@@ -302,6 +354,20 @@ class ReleaseTests(unittest.TestCase):
                 release.main()
             self.assertEqual(len([c for c in calls if c[0] == "npm"]), 1)
             verify.assert_not_called()
+
+    def test_successful_publish_with_delayed_visibility_is_never_republished(self):
+        with (
+            self.operation("publish") as (calls, _, verify, _, _),
+            patch.object(release.time, "sleep"),
+        ):
+            verify.side_effect = [
+                release.RegistryNotVisible(),
+                release.RegistryNotVisible(),
+                b"verified",
+            ]
+            release.main()
+            self.assertEqual(len([c for c in calls if c[0] == "npm"]), 1)
+            self.assertEqual(verify.call_count, 3)
 
     def test_existing_version_is_verified_not_republished(self):
         with self.operation("publish") as (calls, _, verify, registry, _):

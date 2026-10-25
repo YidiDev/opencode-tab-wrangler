@@ -1,5 +1,7 @@
 # OpenCode Tab Wrangler
 
+**Release status:** `1.0.0-rc.2` is a prerelease, not stable v1. npm currently points both `next` and `latest` to this RC after its first real publication. Use an explicit RC version or `@next`; the `latest` label does not mean the remaining stable acceptance gates have passed. See [release policy](RELEASING.md).
+
 Configurable tab housekeeping for the **OpenCode 2.1.4 terminal**, inspired by the independent [Tab Wrangler browser extension](https://github.com/tabwrangler/tabwrangler). Keep tabs that matter; corral the rest without deleting their sessions.
 
 **v1 release candidate; no stable release yet.** Defaults to preview mode. No model calls, backend service, MCP server, telemetry, or access to transcript contents.
