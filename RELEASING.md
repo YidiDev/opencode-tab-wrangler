@@ -5,7 +5,7 @@ No automation changes local users' OpenCode settings. Releases have no calendar 
 
 ## Version contract
 
-Use `1.0.0-rc.N` for candidates (`next`) and `1.0.0` for stable (`latest` after verification).
+Use `1.0.0-rc.N` for candidates (`next`) and `1.0.0` for stable (publish directly to `latest` after pre-publication verification).
 Patch releases preserve the documented configuration/commands/state contract. Minor releases
 add compatible behavior or host support. Breaking settings/defaults/contracts or dropping
 previously supported hosts require a major release. Storage schema version is independent.
@@ -28,14 +28,17 @@ silent activation, shared-layout acknowledgement, or server-namespace assignment
    Protect creation/update/deletion of version tags. Never rewrite published release history.
 5. Configure environment **release-approval** with YidiDev as required reviewer (self-review
    allowed for this single-maintainer project). Configure **npm** with no additional reviewer,
-   restricted to version tags. The separate approval job gates both publishing operations once.
+   restricted to version tags. The separate approval job gates the tested archive's publication once.
 6. The locally authenticated `yididev` account reserved the unscoped name through npm staging.
-   Only npm's `0.0.0-stage` placeholder is public. The staged rc.1 was a reservation artifact:
-   leave it unapproved and reject it through the owner's interactive account flow. Release
-   rc.2 from the verified tagged archive through OIDC, rather than approving the older draft.
+   The staged rc.1 was a reservation artifact: leave it unapproved and reject it through the
+   owner's interactive account flow. RC2 was published from its verified tagged archive through
+   OIDC; do not approve the older draft or restore the unusable placeholder tag.
 7. Configure npm trusted publishing for GitHub owner `YidiDev`, repo `opencode-tab-wrangler`,
-   workflow **release.yml**, environment **npm**. Explicitly allow direct publishing and dist-tag
-   management. Use `npm trust` if supported by the authenticated account or npm's package settings.
+   workflow **release.yml**, environment **npm**. Allow direct publishing. Fresh publication with
+   `npm publish --tag latest` assigns the tag as part of publishing and does not require separate
+   dist-tag-management permission. That additional permission is relevant only to explicitly
+   retagging an already-published version during owner-directed recovery, not normal releases.
+   Use `npm trust` if supported by the authenticated account or npm's package settings.
    Complete the first real OIDC publication within two days of configuring trust.
 8. Prove automation with the first public RC before stable. Stable publishing requires
    provenance. After verifying OIDC, enable
@@ -53,11 +56,12 @@ silent activation, shared-layout acknowledgement, or server-namespace assignment
    npm SHA-512 integrity and source SHA. The runtime inventory describes tested external
    resolutions and licenses, not bundled third-party code or all future consumer resolutions.
 5. Review the artifact and approve **release-approval**. GitHub OIDC publishes RCs to `next`,
-   stable versions to `candidate`. Project dependency/build code never runs in the publisher.
-6. A separate read-only job verifies registry bytes, installs the exact registry version with strict npm peer resolution (not a file: install, which npm's signature verifier skips),
+   stable versions directly to `latest`, using the configured trusted publisher and explicit provenance. There is no automated retagging job or `candidate` staging tag. Project dependency/build code never runs in the publisher.
+6. A separate read-only job verifies registry bytes and the expected `latest`/`next` tag, installs the exact registry version with strict npm peer resolution (not a file: install, which npm's signature verifier skips),
    runs isolated live tests, and tests OpenCode's actual exact-version npm plugin resolver.
-7. Only after those pass can OIDC explicitly promote a stable version to `latest`. The workflow never explicitly promotes an RC to latest. However, the first real publication over npm's reservation placeholder assigned latest to the RC despite `--tag next`; npm rejected authenticated deletion with HTTP 400. The owner accepted this bootstrap caveat. Until stable is ready, use the exact RC version or `@next` and do not interpret npm's latest tag as stable certification. Do not restore the unusable placeholder or bypass stable readiness gates.
-   The GitHub release is created as a draft with all assets, then published immutable.
+7. Only after post-publication registry acceptance passes is the GitHub release finalized: a draft receives all assets, then becomes immutable. npm's stable version is already public on `latest` at this point; a later failed smoke test does not undo publication. Inspect and recover explicitly rather than republish or silently retag.
+
+RCs are published with `--tag next`, never deliberately to latest. The first real publication over npm's reservation placeholder nevertheless assigned latest to RC2; npm rejected authenticated deletion with HTTP 400. The owner accepted this bootstrap caveat. Until stable is ready, use the exact RC version or `@next`; do not restore the unusable placeholder or bypass readiness gates.
 
 Stable 1.0.0 is machine-blocked by `release-readiness.json` until the broader live compatibility matrix in DEVELOPMENT.md has
 evidence, including native unread/errors, executable queues, running descendants, drafts/
@@ -78,11 +82,11 @@ drift does not rewrite the release inventory. It is revalidated against the tag 
 If the artifact has expired, recover the original bytes/metadata from the release or inspect
 the situation manually; never substitute new bytes for an already published version.
 An existing identical npm version is verified and reused; different bytes stop the release.
-After a successful publish response, metadata 404s receive at most 12 read-only verification attempts with five-second intervals (each request also has its own timeout). Integrity mismatches and other errors stop immediately. These reads never repeat `npm publish`. If visibility remains uncertain, inspect the registry before an owner resumes the failed run; an already-visible matching version is verified, not republished.
+After a successful publish response, missing version/tag visibility receives at most 12 read-only verification attempts with five-second intervals (each request also has its own timeout). Integrity mismatches and other errors stop immediately. These reads never repeat `npm publish` or run `npm dist-tag`. If visibility remains uncertain, inspect the registry before an owner resumes the failed run; an already-visible matching version is verified, not republished. If its tag differs, stop for explicit owner recovery instead of silently retagging it.
 
-Registry/network ambiguity never triggers an automatic publish retry. A failed registry smoke prevents workflow promotion, but cannot undo npm's bootstrap tag assignment. Stable promotion can replace a recognized RC at the same or lower base version; it still rejects older stable targets, unknown current versions, and RC targets. A partially uploaded draft requires inspection; assets are never clobbered.
+Registry/network ambiguity never triggers an automatic publish retry. A failed registry smoke prevents GitHub finalization, but cannot undo an admitted npm publication. Before fresh stable publication, the workflow refuses to downgrade an existing newer latest or replace an unknown current version; a recognized RC at the same or lower base version is allowed. A partially uploaded draft requires inspection; assets are never clobbered.
 
 If a stable release is faulty, an authenticated owner can move latest to a previously verified
 version, deprecate the faulty version, and publish a patch. OIDC does not authorize npm deprecate;
-use the owner's supported interactive/2FA flow. Automated promotion refuses downgrades.
+use the owner's supported interactive/2FA flow. Automated publication refuses downgrades.
 Do not automatically unpublish, delete releases/tags, or erase audit evidence.

@@ -73,3 +73,10 @@ test("automated queued fixture cannot wake generation", async () => {
     );
   }
 });
+test("normal release workflow has no separate privileged retagging job", async () => {
+  const workflow = await Bun.file(".github/workflows/release.yml").text();
+  expect(workflow).not.toContain("  promote:");
+  expect(workflow).not.toContain("npm dist-tag");
+  expect(workflow).not.toContain("tools/release.py promote");
+  expect(workflow).toContain("github:\n    needs: registry-verify");
+});
