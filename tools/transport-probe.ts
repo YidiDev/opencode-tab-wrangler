@@ -69,14 +69,16 @@ export default {
           run: async () => {
             if (scenario !== "disconnect") return;
             if (report.phase === "ready") {
+              const tabs = context.ui.tabs.list();
+              if (
+                !report.ids.every((id) =>
+                  tabs.some((t) => t.sessionID === id),
+                ) ||
+                !tabs.some((t) => t.sessionID === report.ids[0] && t.active)
+              )
+                return;
               await save((draft) => {
                 draft.phase = "armed";
-              });
-            } else if (report.phase === "offline-protected") {
-              phaseAt = Date.now();
-              await save((draft) => {
-                draft.phase = "recovering";
-                draft.earlyProtected = false;
               });
             }
           },
@@ -121,6 +123,24 @@ export default {
             throw new Error("Outage lost a fixture tab");
           await save((draft) => {
             draft.phase = "offline-protected";
+          });
+        } else if (report.phase === "offline-protected") {
+          if (!report.ids.every((id) => ids.includes(id)))
+            throw new Error("Outage lost a fixture tab");
+          // Recovery is acknowledged by a real server read, not a key sent while
+          // the connection overlay may own input. A frozen server cannot satisfy it.
+          try {
+            await context.client.session.get(
+              { sessionID: target },
+              { signal: AbortSignal.timeout(500) },
+            );
+          } catch {
+            return;
+          }
+          phaseAt = Date.now();
+          await save((draft) => {
+            draft.phase = "recovering";
+            draft.earlyProtected = false;
           });
         } else if (["recovering", "after-restart"].includes(report.phase)) {
           if (elapsed >= 5200 && elapsed <= 5800) {

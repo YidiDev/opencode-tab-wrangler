@@ -17,6 +17,7 @@
 
 - Publish fresh stable archives directly to `latest` through trusted publishing, following attention-inbox's release pattern; remove the unnecessary privileged retagging job and permission prerequisite.
 - Verify expected registry tags read-only, and stop for explicit recovery if an existing version has a different tag.
+- Make disconnect acceptance acknowledge terminal input before suspending its private backend, time the full outage from confirmed suspension, and detect recovery through a fresh server read rather than an input event during reconnection.
 
 - Add native acceptance for queued descendants, draft/image restoration, owner replacement, restart/disconnection grace, disabled/global/cwd tabs, and competing terminals, including production-only archives.
 - Add an explicitly owner-started, zero-cost loopback fixture for real running-descendant evidence; automated setup never submits a prompt or passes that gate.
