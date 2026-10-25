@@ -1,0 +1,19 @@
+{
+  "host": "2.1.4",
+  "platform": "linux-x64",
+  "stableRequirements": {
+    "native-unread-activity-error": {
+      "status": "passed",
+      "evidence": "tools/compat-probe.ts via test:compat: native activity/error tabs retained while idle tab closes; imported empty sessions, no generation; OpenCode 2.1.4 Linux x64"
+    },
+    "executable-queued-work": { "status": "pending", "evidence": "" },
+    "running-descendants": { "status": "pending", "evidence": "" },
+    "drafts-and-attachments": { "status": "pending", "evidence": "" },
+    "disconnect-restart-reload": { "status": "pending", "evidence": "" },
+    "tab-scopes-and-disabled-tabs": { "status": "pending", "evidence": "" },
+    "competing-clients-acknowledged-limitations": {
+      "status": "pending",
+      "evidence": ""
+    }
+  }
+}

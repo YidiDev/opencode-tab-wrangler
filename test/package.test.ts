@@ -7,6 +7,12 @@ import { Host } from "@opencode/plugin/host";
 test("CLI-only export and generated options schema", async () => {
   const pkg = await Bun.file("package.json").json();
   expect(pkg.exports).toEqual({ "./tui": "./tui.ts" });
+  expect(Object.keys(pkg.peerDependencies)).toEqual(["solid-js"]);
+  expect(Object.keys(pkg.dependencies)).toEqual(["zod"]);
+  const entry = new Bun.Transpiler({ loader: "tsx" }).transformSync(
+    await Bun.file("src/tui.tsx").text(),
+  );
+  expect(entry).not.toContain("@opencode/plugin");
   const schema = await Bun.file("schema.json").json();
   expect(Object.keys(schema.properties).sort()).toEqual(
     Object.keys(configSchema.shape).sort(),

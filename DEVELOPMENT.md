@@ -13,7 +13,7 @@
 - `observation-clock.ts`: wall/monotonic gap detection and explicit intentional-wait allowances, shared by all controller entrypoints.
 - `rules-ui.ts`: guided ordered-rule creation and editing.
 
-No internal host renderable traversal, filesystem access, monkey patches, or server plugin. Import host types with `import type`; only the entrypoint imports the runtime `Plugin` helper. The terminal's own Solid/OpenTUI runtime owns UI execution.
+No internal host renderable traversal, filesystem access, monkey patches, or server plugin. All SDK imports are type-only. The default export is a typed public plugin definition, not a runtime SDK import. Consumers need only Zod and the Solid peer; SDK/OpenTUI packages are development/host tooling, not production dependencies. This avoids forcing OpenTUI's obsolete Solid development pin into a clean consumer installation. The terminal's own UI owns renderables.
 
 ## Commands
 
@@ -39,7 +39,7 @@ GitHub Actions enforces quality/security/coverage plus source and production-onl
 6. Test disconnect, server restart, sleep, hot reload, tabs disabled, global/cwd scope, and competing TUI instances. Do not claim other-client selected-tab safety: public API does not provide it.
 7. Validate packed CLI-only entrypoint with no project `node_modules` fallback.
 8. Document residual conditional-close races and any unsupported scenario. Do not widen the exact host-version gate without this evidence.
-9. Before changing visibility, prepare a verified fallback private contact and scan all Git history with a dedicated tool such as `gitleaks git --redact --log-opts="--all" .`. Immediately when public, enable and verify GitHub private vulnerability reporting, appropriate secret scanning, and required `quality`/`installed-package` checks on `main`. Authorize Renovate if desired. Branch protection is currently unavailable under the private repository's account plan; do not claim it is configured. No workflow automatically publishes packages or changes visibility.
+9. Before changing visibility, prepare a verified fallback private contact and scan all Git history with `gitleaks git --redact --log-opts="--all" .`. Immediately when public, enable and verify GitHub private vulnerability reporting, appropriate secret scanning, and required `quality`/`installed-package`/`analyze` checks. Authorize Renovate if desired. Do not claim branch protection is configured until verified. The explicit version-tag workflow publishes through OIDC only after gates and approval; see RELEASING.md. It never changes repository visibility.
 
 ## Reviewed host behavior (2.1.4 source)
 
@@ -55,4 +55,4 @@ UI rule mutations carry the opening effective array and namespace for transactio
 
 ## Remaining compatibility evidence
 
-Unit/integration-style adapter tests are deterministic fakes. Live tests prove loading, dialog rendering, idle closure, selected/question/permission protection, parked-context eligibility, session preservation, and restoration from both checkout and production-only archive. Unread/error, executable queued work, running descendant, draft, disconnection, and multi-client behavior still need broader live matrix evidence. Multi-client selection is an acknowledged limitation, not implemented protection. Full live matrix items above remain required before describing the package as production-certified or publishing it broadly.
+Unit/integration-style adapter tests are deterministic fakes. Live tests prove loading, dialog rendering, idle closure, selected/question/permission protection, parked-context eligibility, session preservation, and restoration from both checkout and production-only archive. `test:compat` additionally imports empty completed/failed fixture sessions through the public API and verifies the real native activity/error indicators protect their tabs while an idle tab closes. It does not simulate or invoke model generation. Executable queued work, running descendants, drafts/attachments, disconnect/restart/reload, scopes and competing clients still need broader live evidence, tracked in `release-readiness.json`. Stable publication is machine-blocked until those required records pass with evidence. Multi-client selection remains an acknowledged API limitation, never implemented protection. RC publication is not production certification.

@@ -1,4 +1,4 @@
-import { Plugin } from "@opencode/plugin/tui";
+import type { Plugin } from "@opencode/plugin/tui";
 import { createEffect, createRoot } from "solid-js";
 import { Controller } from "./controller";
 import { createHost } from "./host";
@@ -262,7 +262,7 @@ export async function setup(
     );
   }
 }
-export default Plugin.define({
+export default {
   id: "opencode.tab-wrangler",
   setup: (context) => setup(context),
-});
+} satisfies Plugin.Definition;

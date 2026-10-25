@@ -137,6 +137,8 @@ test("rules can be toggled without editing JSON", async () => {
 });
 test("cross-field and JSON settings errors explain how to correct the input", async () => {
   const h = uiFixture(["cleanup", "over-limit"]);
+  delete h.controller.dep.options.cleanup;
+  await h.controller.preferences({ cleanup: "all-idle", softMaxTabs: null });
   await h.ui.settings();
   expect(h.alerts[0]).toContain("softMaxTabs");
   const j = uiFixture(["batchSize"], ["{"]);

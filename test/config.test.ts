@@ -11,6 +11,20 @@ import {
 import { tab } from "./support";
 
 describe("configuration", () => {
+  test("v1 public defaults are preview-first, capped and fully protected", () => {
+    const c = resolveConfig({}, {});
+    expect(c).toMatchObject({
+      mode: "preview",
+      minTabs: 3,
+      softMaxTabs: 8,
+      cleanup: "over-limit",
+      batchSize: 2,
+      idleMinutes: 30,
+      graceMinutes: 30,
+      acknowledgeSharedTabs: false,
+    });
+    expect(Object.values(c.protections).every(Boolean)).toBe(true);
+  });
   test("safe defaults and nested precedence", () => {
     const config = resolveConfig(
       { idleMinutes: 10, protections: { questions: false, pending: false } },
@@ -28,7 +42,7 @@ describe("configuration", () => {
     { checkSeconds: 0 },
     { batchSize: 0 },
     { minTabs: 4, softMaxTabs: 2 },
-    { cleanup: "over-limit" },
+    { cleanup: "over-limit", softMaxTabs: null },
     { mode: "force" },
     { unknown: true },
     { protections: { selected: false } },

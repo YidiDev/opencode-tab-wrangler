@@ -3,6 +3,7 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  workflow_call:
   schedule:
     - cron: "27 5 * * 1"
 permissions:
@@ -28,6 +29,7 @@ jobs:
       - run: python3 -m pip install -r requirements-dev.txt
       - run: bun run check
       - run: bun run lint:python
+      - run: bun run lint:workflows
       - run: bun run test:coverage
       - run: bun run test:security
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -53,11 +55,16 @@ jobs:
       - name: Install integrity-pinned OpenCode 2.1.4
         run: python3 tools/install-host.py >> "$GITHUB_PATH"
       - run: bun run test:live
+      - run: bun run test:compat
       - run: bun run test:package
       # Raw terminal/server logs stay local: do not upload credentials or arbitrary transcript data.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: success()
         with:
           name: preview-package
-          path: opencode-tab-wrangler-*.tgz
+          path: |
+            opencode-tab-wrangler-*.tgz
+            .artifacts/release/runtime-dependencies.json
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 7

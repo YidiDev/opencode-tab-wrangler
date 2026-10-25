@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0-rc.2
+
+- First prepared public v1 candidate, authored and maintained by Yidi Sprei (YidiDev), MIT-licensed with explicit third-party notices.
+- Preview-first capped defaults: minimum 3, soft maximum 8, over-limit cleanup, two-tab batches; all protections remain enabled.
+- Removed runtime SDK/OpenTUI dependencies; a strict npm consumer installs only the required validation/reactivity libraries.
+- Added verified-archive, OIDC, registry-install and immutable GitHub release automation with a single approval gate and no stored npm token.
+- Existing state schema remains version 1. Explicit saved/file preferences take precedence over new defaults; upgrades reset grace and never grant shared-layout acknowledgement.
+- Supported host remains OpenCode 2.1.4 on Linux x64. Other-client selection and atomic conditional closing are not available from the public host API. Broader stable-release evidence remains tracked in DEVELOPMENT.md.
+
+## 1.0.0-rc.1
+
+- Unapproved npm staging artifact used only to reserve the global package name. No candidate source was publicly published from that stage. Do not approve/install this reservation artifact.
+
 ## Unreleased
 
 - Centralize gap detection across manual cleanup, observations, refreshes, and asynchronous waits; distinguish intentional batch delay from suspension/oversleep.

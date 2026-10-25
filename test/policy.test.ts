@@ -11,7 +11,13 @@ import type { Tab } from "../src/model";
 
 const config = resolveConfig(
   {},
-  { idleMinutes: 1, graceMinutes: 1, minTabs: 1, batchSize: 10 },
+  {
+    idleMinutes: 1,
+    graceMinutes: 1,
+    minTabs: 1,
+    batchSize: 10,
+    cleanup: "all-idle",
+  },
 );
 test.each([
   [{ active: true }, "selected"],

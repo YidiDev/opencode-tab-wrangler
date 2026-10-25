@@ -1,0 +1,183 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing immutable version tag; run dispatch on this same tag"
+        required: true
+        type: string
+      resume_run_id:
+        description: "Optional original Release run ID: reuse its exact verified artifact after a partial publish"
+        required: false
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: python3 tools/release.py validate-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+  verify:
+    needs: prepare
+    uses: ./.github/workflows/check.yml
+  codeql:
+    needs: prepare
+    permissions:
+      contents: read
+      security-events: write
+    uses: ./.github/workflows/codeql.yml
+  archive:
+    needs: [verify, codeql]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        if: inputs.resume_run_id == ''
+        with:
+          name: preview-package
+      - run: python3 tools/release.py manifest
+        if: inputs.resume_run_id == ''
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        if: inputs.resume_run_id != ''
+        with:
+          name: verified-release
+          path: .artifacts/release
+          run-id: ${{ inputs.resume_run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verified-release
+          path: .artifacts/release/
+          retention-days: 30
+          include-hidden-files: true
+          if-no-files-found: error
+  approval:
+    needs: archive
+    environment: release-approval
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - run: echo "Maintainer approved the verified release artifact"
+  publish:
+    needs: approval
+    environment: npm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24.22.1"
+          package-manager-cache: false
+      # Bootstrap only the pinned publishing CLI; never install the project's dependencies here.
+      - run: npm install --global npm@12.2.1 --ignore-scripts
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: verified-release
+          path: .artifacts/release
+      - run: python3 tools/release.py publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+  registry-verify:
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # No OIDC or write token while executing the published plugin.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24.22.1"
+          package-manager-cache: false
+      - run: npm install --global npm@12.2.1 --ignore-scripts
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: verified-release
+          path: .artifacts/release
+      - run: python3 tools/release.py fetch
+      - run: python3 tools/install-host.py >> "$GITHUB_PATH"
+      - run: python3 tools/package-smoke.py --archive .artifacts/release/registry.tgz --signatures
+      - name: Exercise the actual npm-spec plugin resolver
+        run: python3 tools/pty-smoke.py --cleanup --spec "opencode-tab-wrangler@${RELEASE_TAG#v}"
+  promote:
+    needs: registry-verify
+    environment: npm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24.22.1"
+          package-manager-cache: false
+      - run: npm install --global npm@12.2.1 --ignore-scripts
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: verified-release
+          path: .artifacts/release
+      - run: python3 tools/release.py promote
+        env:
+          GH_TOKEN: ${{ github.token }}
+  github:
+    needs: promote
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: verified-release
+          path: .artifacts/release
+      - run: python3 tools/release.py github
+        env:
+          GH_TOKEN: ${{ github.token }}

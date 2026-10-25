@@ -66,6 +66,7 @@ export function harness(options: Options = {}, tabs = [tab()]) {
       connectionKey: "test",
       acknowledgeSharedTabs: true,
       minTabs: 0,
+      cleanup: "all-idle",
       idleMinutes: 1,
       graceMinutes: 1,
       batchDelaySeconds: 0,

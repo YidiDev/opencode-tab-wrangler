@@ -1,9 +1,24 @@
 {
   "name": "opencode-tab-wrangler",
-  "version": "0.1.0",
+  "version": "1.0.0-rc.2",
   "description": "Configurable, safety-first tab housekeeping for the OpenCode terminal",
   "type": "module",
   "license": "MIT",
+  "author": {
+    "name": "Yidi Sprei",
+    "url": "https://github.com/YidiDev"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "terminal",
+    "tabs",
+    "tab-wrangler"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/YidiDev/opencode-tab-wrangler.git"
@@ -25,26 +40,28 @@
     "SECURITY.md",
     "CODE_OF_CONDUCT.md",
     "CHANGELOG.md",
+    "THIRD_PARTY_NOTICES.md",
+    "RELEASING.md",
     "LICENSE"
   ],
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
-    "check": "prettier --check . && bun run lint && tsc --noEmit && bun run schema:check && bun test",
+    "check": "prettier --check . && bun run lint && tsc --noEmit && bun run schema:check && bun test && bun run test:python",
+    "test:python": "python3 -m unittest discover -s test -p '*_test.py'",
     "lint": "eslint src test tools tui.ts eslint.config.js",
-    "lint:python": "python3 -m ruff check tools && python3 -m ruff format --check tools",
+    "lint:python": "python3 -m ruff check tools test && python3 -m ruff format --check tools test",
+    "lint:workflows": "go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7",
     "test:security": "bun tools/security.ts && bun audit",
     "schema": "bun tools/schema.ts",
     "schema:check": "bun tools/schema.ts --check",
     "test:live": "python3 tools/pty-smoke.py --cleanup",
+    "test:compat": "python3 tools/pty-smoke.py --compat",
     "test:package": "python3 tools/package-smoke.py",
     "test:coverage": "bun test --preload ./test/coverage-preload.ts --coverage --coverage-reporter=text --coverage-reporter=lcov && bun tools/coverage.ts"
   },
   "peerDependencies": {
-    "@opencode/plugin": "2.1.4",
-    "@opentui/core": ">=0.6.8 <0.7.0",
-    "@opentui/solid": ">=0.6.8 <0.7.0",
     "solid-js": ">=1.9.17 <2"
   },
   "devDependencies": {

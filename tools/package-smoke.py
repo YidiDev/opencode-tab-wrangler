@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Pack, install production dependencies outside the checkout, then exercise the real host."""
 
+import argparse
 import json
 import os
 import subprocess
@@ -9,12 +10,30 @@ import time
 from pathlib import Path
 
 repo = Path(__file__).resolve().parents[1]
-subprocess.run(["bun", "pm", "pack"], cwd=repo, check=True)
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--archive", type=Path, help="Verify this exact existing archive without repacking"
+)
+parser.add_argument(
+    "--signatures",
+    action="store_true",
+    help="Verify registry signatures/provenance after publication",
+)
+args = parser.parse_args()
+if not args.archive:
+    subprocess.run(["bun", "pm", "pack"], cwd=repo, check=True)
 # Outside the repository: imports cannot accidentally fall back to its development node_modules.
 root = Path.home() / ".cache" / "opencode-tab-wrangler-package-tests" / str(time.time_ns())
 root.mkdir(parents=True)
+(root / "package.json").write_text(
+    json.dumps({"name": "wrangler-isolated-consumer", "version": "0.0.0", "private": True})
+)
 manifest = json.loads((repo / "package.json").read_text())
-archive = repo / f"{manifest['name']}-{manifest['version']}.tgz"
+archive = (
+    args.archive.resolve()
+    if args.archive
+    else repo / f"{manifest['name']}-{manifest['version']}.tgz"
+)
 expected = {"package/package.json", "package/tui.ts", "package/schema.json"}
 expected.update(
     f"package/{name}"
@@ -26,6 +45,8 @@ expected.update(
         "CODE_OF_CONDUCT.md",
         "CHANGELOG.md",
         "LICENSE",
+        "THIRD_PARTY_NOTICES.md",
+        "RELEASING.md",
     )
 )
 expected.update(
@@ -46,12 +67,67 @@ package = root / "package"
 env = dict(os.environ)
 env.pop("NODE_PATH", None)
 subprocess.run(
-    ["bun", "install", "--production", "--ignore-scripts"], cwd=package, env=env, check=True
+    [
+        "npm",
+        "install",
+        "--omit=dev",
+        "--ignore-scripts",
+        "--strict-peer-deps",
+        "--no-audit",
+        "--no-fund",
+        str(archive),
+    ],
+    cwd=root,
+    env=env,
+    check=True,
 )
+installed = root / "node_modules" / manifest["name"]
+if not installed.is_dir():
+    raise RuntimeError("Strict npm consumer install did not produce the package")
+inventory = []
+lock = json.loads((root / "package-lock.json").read_text())
+for path in sorted(lock["packages"]):
+    if not path:
+        continue
+    file = root / path / "package.json"
+    if not file.resolve().is_relative_to((root / "node_modules").resolve()):
+        raise RuntimeError("Unexpected installed dependency path")
+    data = json.loads(file.read_text())
+    if data.get("license") not in {
+        "MIT",
+        "ISC",
+        "BSD-2-Clause",
+        "BSD-3-Clause",
+        "Apache-2.0",
+        "0BSD",
+    }:
+        raise RuntimeError("A tested runtime dependency requires explicit license review")
+    inventory.append({"name": data["name"], "version": data["version"], "license": data["license"]})
+evidence = repo / ".artifacts" / "release"
+evidence.mkdir(parents=True, exist_ok=True)
+(evidence / "runtime-dependencies.json").write_text(
+    json.dumps(
+        {
+            "scope": "tested external runtime installation; not bundled libraries",
+            "packages": inventory,
+        },
+        indent=2,
+    )
+    + "\n"
+)
+subprocess.run(["npm", "audit", "--omit=dev"], cwd=root, env=env, check=True)
+if args.signatures:
+    subprocess.run(["npm", "audit", "signatures"], cwd=root, env=env, check=True)
 subprocess.run(
-    ["python3", str(repo / "tools/pty-smoke.py"), "--cleanup", "--package", str(package)],
+    ["python3", str(repo / "tools/pty-smoke.py"), "--cleanup", "--package", str(installed)],
     cwd=repo,
     env=env,
     check=True,
 )
-print(f"PASS: packed plugin with production dependencies only: {package}")
+print(f"PASS: packed plugin with production dependencies only: {installed}")
+subprocess.run(
+    ["python3", str(repo / "tools/pty-smoke.py"), "--compat", "--package", str(installed)],
+    cwd=repo,
+    env=env,
+    check=True,
+)

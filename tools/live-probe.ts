@@ -1,8 +1,8 @@
 // Loaded ONLY by the explicitly invoked isolated live test. Creates disposable sessions, no model prompts.
-import { Plugin } from "@opencode/plugin/tui";
+import type { Plugin } from "@opencode/plugin/tui";
 import type { SessionInfo } from "@opencode/client";
 
-export default Plugin.define({
+export default {
   id: "test.tab-wrangler-probe",
   async setup(context) {
     const [, save] = context.storage.store<Record<string, unknown>>("results", {
@@ -156,4 +156,4 @@ export default Plugin.define({
       permissionAbort.abort();
     };
   },
-});
+} satisfies Plugin.Definition;

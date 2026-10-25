@@ -1,10 +1,27 @@
 # OpenCode Tab Wrangler
 
-Configurable tab housekeeping for the **OpenCode 2.1.4 terminal**, inspired by Chrome's Tab Wrangler. Keep tabs that matter; corral the rest without deleting their sessions.
+Configurable tab housekeeping for the **OpenCode 2.1.4 terminal**, inspired by the independent [Tab Wrangler browser extension](https://github.com/tabwrangler/tabwrangler). Keep tabs that matter; corral the rest without deleting their sessions.
 
-**Preview release. Not published to npm.** Defaults to preview mode. No model calls, backend service, MCP server, telemetry, or access to transcript contents.
+**v1 release candidate; no stable release yet.** Defaults to preview mode. No model calls, backend service, MCP server, telemetry, or access to transcript contents.
+
+**Author and maintainer: Yidi Sprei ([YidiDev](https://github.com/YidiDev)). Copyright © 2026 Yidi Sprei.** Original project material is MIT-licensed; third-party rights and notices remain separate. See [attribution and acknowledgements](THIRD_PARTY_NOTICES.md).
 
 **Compatibility:** OpenCode **2.1.4** only; automated/live evidence is Linux x64 with Bun **1.4.0**. Other platforms are unverified. Keep automatic cleanup in a single terminal when possible. This is not a replacement tab strip or a cross-terminal pinning system.
+
+## Install a published candidate
+
+The unscoped npm name **`opencode-tab-wrangler`** belongs to npm account **`yididev`**. Do not install the `0.0.0-stage` name-reservation placeholder. Until a prerelease appears in [GitHub Releases](https://github.com/YidiDev/opencode-tab-wrangler/releases), use the local installation below.
+
+For a published candidate, merge into global `~/.config/opencode/cli.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/v2/cli.json",
+  "plugins": [{ "package": "opencode-tab-wrangler@next", "options": {} }]
+}
+```
+
+For reproducible installation, replace `next` with the exact published version, such as `1.0.0-rc.2`. Stable releases will use `latest`; version 1.x describes this plugin, **not** compatibility with OpenCode V1. Preserve unrelated plugins. Do not add a duplicate local/npm registration.
 
 ## Install locally
 
@@ -41,7 +58,7 @@ The plugin **does not install or enable itself**, and this repository does not c
 4. Try **Preview and clean eligible tabs** for a confirmed manual batch.
 5. Set `mode` to `auto` when satisfied. All protections remain enabled by default.
 
-If nothing is eligible, inspect the stated protection reasons. The default `minTabs: 5` retains at least five tabs, and default idle/grace intervals are 30 minutes. Preview mode never closes automatically. The manager explicitly reports setup-blocked, paused, off, scheduled, or automatic status.
+If nothing is eligible, inspect the stated protection reasons. Defaults are minimum **3**, soft maximum **8**, **over-limit** cleanup, batches of **2**, and 30-minute idle/grace intervals. Over-limit cleanup retains eight tabs unless you choose different limits; the minimum is a separate hard floor. Preview mode never closes automatically. The manager explicitly reports setup-blocked, paused, off, scheduled, or automatic status.
 
 ### A typical workflow
 
@@ -97,22 +114,22 @@ Invalid settings, unsupported state versions, or recovery-storage failures disab
 
 ### General settings
 
-| Option                  | Default          | Meaning                                                                                   |
-| ----------------------- | ---------------- | ----------------------------------------------------------------------------------------- |
-| `mode`                  | `"preview"`      | `preview`, `auto`, or `off`; manual cleanup allowed in preview only after confirmation    |
-| `connectionKey`         | `"unconfigured"` | Unique namespace per server; must be changed before closure                               |
-| `acknowledgeSharedTabs` | `false`          | Explicit acknowledgement required for any closure                                         |
-| `idleMinutes`           | `30`             | Minimum time since qualifying activity; 0 permits immediate eligibility after grace       |
-| `graceMinutes`          | `30`             | Minimum grace after observation begins or a protection clears                             |
-| `excluded`              | `false`          | Exclude all tabs by default; rules can opt selected matches back in                       |
-| `checkSeconds`          | `30`             | Scheduler interval; integer 5–3600                                                        |
-| `minTabs`               | `5`              | Hard retained-tab floor, counting protected tabs                                          |
-| `softMaxTabs`           | `null`           | Optional target for `over-limit` cleanup; never overrides protections or timers           |
-| `cleanup`               | `"all-idle"`     | Close eligible idle tabs down to the floor, or `over-limit` only down to the soft maximum |
-| `order`                 | `"oldest-idle"`  | `oldest-idle`, `oldest-opened`, `left-to-right`, `right-to-left`                          |
-| `batchSize`             | `3`              | Maximum closes per manual/automatic pass; integer 1–100                                   |
-| `batchDelaySeconds`     | `2`              | Delay between closes, also minimum gap after the last successful automatic batch          |
-| `notification`          | `"summary"`      | One summary toast per successful batch, or `silent`                                       |
+| Option                  | Default          | Meaning                                                                                |
+| ----------------------- | ---------------- | -------------------------------------------------------------------------------------- |
+| `mode`                  | `"preview"`      | `preview`, `auto`, or `off`; manual cleanup allowed in preview only after confirmation |
+| `connectionKey`         | `"unconfigured"` | Unique namespace per server; must be changed before closure                            |
+| `acknowledgeSharedTabs` | `false`          | Explicit acknowledgement required for any closure                                      |
+| `idleMinutes`           | `30`             | Minimum time since qualifying activity; 0 permits immediate eligibility after grace    |
+| `graceMinutes`          | `30`             | Minimum grace after observation begins or a protection clears                          |
+| `excluded`              | `false`          | Exclude all tabs by default; rules can opt selected matches back in                    |
+| `checkSeconds`          | `30`             | Scheduler interval; integer 5–3600                                                     |
+| `minTabs`               | `3`              | Hard retained-tab floor, counting protected tabs                                       |
+| `softMaxTabs`           | `8`              | Target for `over-limit` cleanup; never overrides protections or timers                 |
+| `cleanup`               | `"over-limit"`   | Close eligible idle tabs down to the soft maximum, or `all-idle` down to the floor     |
+| `order`                 | `"oldest-idle"`  | `oldest-idle`, `oldest-opened`, `left-to-right`, `right-to-left`                       |
+| `batchSize`             | `2`              | Maximum closes per manual/automatic pass; integer 1–100                                |
+| `batchDelaySeconds`     | `2`              | Delay between closes, also minimum gap after the last successful automatic batch       |
+| `notification`          | `"summary"`      | One summary toast per successful batch, or `silent`                                    |
 
 For `over-limit`, `softMaxTabs` is required and must be at least `minTabs`. In `all-idle` mode the soft maximum does not limit cleanup. A floor of zero still cannot override selected/running protections. Protected tabs may exceed the soft maximum indefinitely.
 
@@ -274,6 +291,8 @@ Merge this plugin entry into `cli.json` only after reviewing the shared-tab limi
 
 Linux x64, Bun 1.4.0, OpenCode 2.1.4; OpenTUI 0.6.8 and patched Solid 1.9.17 for development. Host APIs are isolated in `src/host.ts`; pure policy is in `src/policy.ts`. Refresh is bounded to open tabs and descendants, with configurable concurrency/deadlines. There are no transcript downloads or scans of all historical sessions.
 
+OpenCode owns its bundled UI runtime. Installing this plugin's patched Solid peer does not upgrade the host's bundled libraries; package audits are not a security certification of OpenCode. The SDK and OpenTUI are development-only here, avoiding their development peer pin in production consumers. Standalone/manual shell side-channels are not session executions and are not advertised as tracked by the session-execution guard.
+
 ```sh
 bun install --frozen-lockfile
 bun run check
@@ -290,6 +309,6 @@ Additional regressions cover conflicting native/server unread indicators (positi
 
 CI runs installed-package/live tests, TypeScript and Python linting, schema parity, dependency/credential checks, and full-production-module coverage accounting. Coverage floors are 80% lines/75% functions per production file and 85% aggregate; tests/helpers are not part of the custom production denominator. Property and race tests supplement coverage, not the reverse. CodeQL runs when public-repository entitlement is available; it is skipped while this repository is private.
 
-See [Contributing](CONTRIBUTING.md), [Security](SECURITY.md), [Code of conduct](CODE_OF_CONDUCT.md), and [Changelog](CHANGELOG.md). Dependency-update configurations are supplied; Renovate still requires its GitHub app to be authorized. No automation publishes to npm or changes repository visibility.
+See [Contributing](CONTRIBUTING.md), [Security](SECURITY.md), [Code of conduct](CODE_OF_CONDUCT.md), [Changelog](CHANGELOG.md), and [Releasing](RELEASING.md). Explicit version-tag releases publish through OIDC only after verification and approval. Automation never changes repository visibility. Dependency-update configurations are supplied; Renovate still requires its GitHub app to be authorized.
 
 See [`DEVELOPMENT.md`](DEVELOPMENT.md) for the live smoke test, known limits, and release checklist. To disable, remove the CLI plugin entry or set mode `off`; no database cleanup or session deletion is necessary. Removing the entry does not erase the host's stored plugin preferences/history.

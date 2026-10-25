@@ -19,6 +19,15 @@ from pathlib import Path
 repo = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument(
+    "--compat",
+    action="store_true",
+    help="Verify real native unread/error mapping with imported empty fixture sessions",
+)
+parser.add_argument(
+    "--spec",
+    help="Exact npm package spec; exercises native registry acquisition, not a local directory",
+)
+parser.add_argument(
     "--cleanup",
     action="store_true",
     help="Also verify real automatic closure, waiting/selected protection, and recovery",
@@ -30,6 +39,8 @@ parser.add_argument(
     help="Plugin directory (use an extracted archive for package testing)",
 )
 args = parser.parse_args()
+if args.compat:
+    args.cleanup = True
 binary = shutil.which("opencode")
 if not binary:
     raise SystemExit("OpenCode 2.1.4 is required")
@@ -43,7 +54,7 @@ project.mkdir(parents=True)
 config = root / "config" / "opencode"
 config.mkdir(parents=True)
 options = {"mode": "preview"}
-plugins = [{"package": str(args.package.resolve()), "options": options}]
+plugins = [{"package": args.spec or str(args.package.resolve()), "options": options}]
 if args.cleanup:
     options.update(
         {
@@ -54,13 +65,16 @@ if args.cleanup:
             "graceMinutes": 0.02,
             "checkSeconds": 5,
             "minTabs": 1,
+            "cleanup": "all-idle",
             "batchSize": 3,
             "batchDelaySeconds": 0,
         }
     )
     probe = root / "probe"
     probe.mkdir()
-    (probe / "tui.ts").write_text((repo / "tools" / "live-probe.ts").read_text())
+    (probe / "tui.ts").write_text(
+        (repo / "tools" / ("compat-probe.ts" if args.compat else "live-probe.ts")).read_text()
+    )
     plugins.append({"package": str(probe)})
 (config / "cli.json").write_text(
     json.dumps(
@@ -158,9 +172,12 @@ try:
             os.write(master, b"\r")
             submitted = True
         if args.cleanup and rendered and report.get("phase") == "passed":
-            print(
-                f"PASS: {version}; manager, automatic closure, selected/question/permission protection, parked context, intact sessions, and restoration"
+            detail = (
+                "native unread activity/error protection with imported empty fixtures"
+                if args.compat
+                else "automatic closure, selected/question/permission protection, parked context, intact sessions, and restoration"
             )
+            print(f"PASS: {version}; manager, {detail}")
             passed = True
             break
     else:

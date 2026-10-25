@@ -15,7 +15,14 @@ test("seeded randomized selection preserves floors, batches, and hard protection
       batchSize = 1 + Math.floor(rand() * 20);
     const config = resolveConfig(
       {},
-      { idleMinutes: 0, graceMinutes: 0, minTabs, batchSize },
+      {
+        idleMinutes: 0,
+        graceMinutes: 0,
+        minTabs,
+        batchSize,
+        cleanup: "all-idle",
+        softMaxTabs: null,
+      },
     );
     const decisions = Array.from({ length: count }, (_, i) => {
       const t = tab(String(i), {
