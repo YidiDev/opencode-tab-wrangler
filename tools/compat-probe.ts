@@ -9,6 +9,14 @@ export default {
       initial: { phase: "starting" },
     });
     const location = context.location ?? context.data.location.default();
+    const selected = await context.client.session.create({
+      title: "compat-selected",
+      location,
+    });
+    await context.data.session.sync(selected.id);
+    context.ui.tabs.open(selected.id);
+    context.ui.tabs.focus(selected.id);
+    context.ui.router.navigate({ type: "session", sessionID: selected.id });
     const template = await context.client.session.create({
       title: "compat-template",
       location,
@@ -31,11 +39,9 @@ export default {
       title: "compat-idle",
       location,
     });
-    const selected = await context.client.session.create({
-      title: "compat-selected",
-      location,
-    });
-    for (const session of [activity, error, idle, selected]) {
+    // The first opened tab can become selected before later async opens finish.
+    // Establish the selected fixture first so imported unread tabs are never viewed.
+    for (const session of [activity, error, idle]) {
       await context.data.session.sync(session.id);
       context.ui.tabs.open(session.id);
     }
@@ -43,13 +49,20 @@ export default {
     await save((draft) => {
       draft.phase = "ready";
     });
-    let checking = false,
+    let observed = false,
+      checking = false,
       finished = false;
     const timer = setInterval(async () => {
       if (checking || finished) return;
       checking = true;
       try {
         const tabs = context.ui.tabs.list();
+        if (!observed) {
+          observed = [activity, error, idle, selected].every((s) =>
+            tabs.some((t) => t.sessionID === s.id),
+          );
+          return;
+        }
         if (!tabs.some((t) => t.sessionID === idle.id)) {
           const a = tabs.find((t) => t.sessionID === activity.id);
           const b = tabs.find((t) => t.sessionID === error.id);

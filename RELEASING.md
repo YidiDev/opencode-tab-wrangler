@@ -54,7 +54,7 @@ silent activation, shared-layout acknowledgement, or server-namespace assignment
    resolutions and licenses, not bundled third-party code or all future consumer resolutions.
 5. Review the artifact and approve **release-approval**. GitHub OIDC publishes RCs to `next`,
    stable versions to `candidate`. Project dependency/build code never runs in the publisher.
-6. A separate read-only job verifies registry bytes, installs with strict npm peer resolution,
+6. A separate read-only job verifies registry bytes, installs the exact registry version with strict npm peer resolution (not a file: install, which npm's signature verifier skips),
    runs isolated live tests, and tests OpenCode's actual exact-version npm plugin resolver.
 7. Only after those pass can OIDC promote a stable version to `latest`. RCs never move latest.
    The GitHub release is created as a draft with all assets, then published immutable.
