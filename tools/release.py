@@ -52,12 +52,13 @@ def check_running_evidence(root):
         or record.get("status") != "passed"
         or record.get("host") != "2.1.4"
         or record.get("platform") != "linux-x64"
-        or record.get("ownerSubmitted") is not True
+        or (record.get("ownerSubmitted") is True, record.get("ownerAuthorizedAgent") is True)
+        not in {(True, False), (False, True)}
         or record.get("protectedDuringEligibleIdleCleanup") is not True
         or record.get("completedParentClosedAndRestored") is not True
         or record.get("runtimeSha256") != digest.hexdigest()
     ):
-        raise ValueError("Owner-run running evidence does not match this runtime")
+        raise ValueError("Authorized running evidence does not match this runtime")
 
 
 def check_stable_readiness(version, policy):

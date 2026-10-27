@@ -18,6 +18,8 @@ import time
 import zlib
 from pathlib import Path
 
+from acceptance import NativeBudget
+from draft_control import DraftControl
 from transport_control import DisconnectControl
 
 repo = Path(__file__).resolve().parents[1]
@@ -246,8 +248,7 @@ submitted = False
 rendered = False
 passed = False
 reconfigured = False
-draft_stage = 0
-draft_step_at = 0.0
+draft_control = DraftControl()
 draft_capture = 0
 draft_marker = "WRANGLER_DRAFT_9D2"
 transport_stage = 0
@@ -267,9 +268,10 @@ if args.lifecycle == "draft":
     )
 text = ""
 start = time.monotonic()
+case_budget = NativeBudget(start)
 disconnect_control = DisconnectControl()
 try:
-    while time.monotonic() - start < 60:
+    while time.monotonic() < case_budget.deadline:
         report = {}
         results = (
             root
@@ -281,6 +283,7 @@ try:
         )
         if args.cleanup and results.exists():
             report = json.loads(results.read_text())
+            case_budget.observe(report.get("phase"), time.monotonic())
             if args.lifecycle == "competing":
                 if report.get("phase") == "ready" and peer_process is None:
                     peer_config = root / "config-peer/opencode"
@@ -352,41 +355,39 @@ try:
                     os.killpg(backend.pid, signal.SIGCONT)
                     transport_stage = 2
             if args.lifecycle == "draft":
-                now = time.monotonic()
-                if report.get("phase") == "ready" and draft_stage == 0:
-                    draft_stage, draft_step_at = 1, now + 0.5
-                if now >= draft_step_at:
-                    if draft_stage == 1:
-                        os.write(master, b"\x1b[200~" + attachment.as_uri().encode() + b"\x1b[201~")
-                        draft_stage, draft_step_at = 2, now + 0.5
-                    elif draft_stage == 2:
-                        os.write(master, b"\x1b[200~" + draft_marker.encode() + b"\x1b[201~")
-                        draft_stage, draft_step_at = 3, now + 0.5
-                    elif draft_stage == 3:
-                        os.write(master, b"\x1b[19~")
-                        draft_stage = 4
-                if report.get("phase") == "closed" and draft_stage == 4:
+                confirmed = False
+                if report.get("phase") == "closed" and draft_control.stage == 4:
                     state_file = (
                         root / "state/opencode/latest/tui/plugin.opencode.tab-wrangler.state.json"
                     )
-                    state = json.loads(state_file.read_text())
-                    if any(
-                        e["sessionID"] == report["ids"][1] and e["state"] == "closed"
-                        for e in state["corral"]
-                    ):
+                    if state_file.exists():
+                        confirmed = any(
+                            e["sessionID"] == report["ids"][1] and e["state"] == "closed"
+                            for e in json.loads(state_file.read_text())["corral"]
+                        )
+                visible = draft_marker in re.sub(
+                    r"\x1b\[[0-?]*[ -/]*[@-~]",
+                    "",
+                    capture[draft_capture:].decode("utf-8", errors="replace"),
+                )
+                action = draft_control.advance(
+                    report.get("phase"),
+                    time.monotonic(),
+                    text_visible=visible,
+                    close_confirmed=confirmed,
+                )
+                if action == "arm":
+                    os.write(master, b"\x1b[20~")
+                elif action == "image":
+                    os.write(master, b"\x1b[200~" + attachment.as_uri().encode() + b"\x1b[201~")
+                elif action == "text":
+                    draft_capture = len(capture)
+                    os.write(master, b"\x1b[200~" + draft_marker.encode() + b"\x1b[201~")
+                elif action in {"close", "restore", "clear"}:
+                    if action == "restore":
                         draft_capture = len(capture)
-                        os.write(master, b"\x1b[19~")
-                        draft_stage = 5
-                if report.get("phase") == "restored" and draft_stage == 5:
-                    restored = re.sub(
-                        r"\x1b\[[0-?]*[ -/]*[@-~]",
-                        "",
-                        capture[draft_capture:].decode("utf-8", errors="replace"),
-                    )
-                    if draft_marker in restored:
-                        os.write(master, b"\x1b[19~")
-                        draft_stage = 6
-                if report.get("phase") == "passed" and draft_stage != 6:
+                    os.write(master, b"\x1b[19~")
+                if report.get("phase") == "passed" and draft_control.stage != 6:
                     raise RuntimeError(
                         "Native draft text was not independently observed after restoration"
                     )

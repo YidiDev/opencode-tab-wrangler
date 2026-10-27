@@ -1,4 +1,4 @@
-// Owner-run fixture. This plugin NEVER submits a prompt or starts generation.
+// Isolated local-dummy fixture. Execution requires the driver's explicit submit option.
 import type { Plugin } from "@opencode/plugin/tui";
 
 export default {
@@ -11,6 +11,7 @@ export default {
         protectedDuringCleanup: false,
         workingAt: 0,
         completedAt: 0,
+        submitted: false,
       },
     });
     if (["passed", "failed"].includes(report.phase)) return;
@@ -66,11 +67,14 @@ export default {
     }
     context.keymap.layer(() => ({
       mode: "global",
+      priority: 10000,
       commands: [
         {
           id: "test.running.arm",
           bind: "f8",
-          run: async () => {
+          run: async (_input, event) => {
+            event?.preventDefault();
+            event?.stopPropagation();
             if (report.phase === "ready")
               await save((draft) => {
                 draft.phase = "armed";
@@ -163,6 +167,24 @@ export default {
         checking = false;
       }
     }, 100);
+    if (context.options.submit === true && !report.submitted) {
+      if (
+        report.phase !== "armed" ||
+        !["owner", "owner-authorized-agent"].includes(
+          String(context.options.initiator),
+        )
+      )
+        throw new Error("Missing explicit local execution authorization");
+      // Persist one-shot admission before waking this fixture child; owner replacement cannot replay it.
+      await save((draft) => {
+        draft.submitted = true;
+      });
+      await context.client.session.prompt({
+        sessionID: child.id,
+        text: "Reply once without tools.",
+        resume: true,
+      });
+    }
     return () => {
       stopped = true;
       clearInterval(timer);

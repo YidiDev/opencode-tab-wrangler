@@ -23,6 +23,15 @@ with patch.dict(sys.modules, {"acceptance": acceptance}):
 
 
 class AcceptanceTests(unittest.TestCase):
+    def test_bootstrap_allowance_does_not_shorten_or_renew_assertion_window(self):
+        budget = acceptance.NativeBudget(0)
+        budget.observe("starting", 120)
+        self.assertEqual(budget.deadline, 180)
+        budget.observe("ready", 150)
+        self.assertEqual(budget.deadline, 210)
+        budget.observe("restoring", 190)
+        self.assertEqual(budget.deadline, 210)
+
     def test_other_platforms_cannot_be_mislabeled_as_supported_evidence(self):
         with patch.object(sys, "platform", "darwin"), self.assertRaises(SystemExit):
             acceptance.require_platform()
@@ -62,6 +71,16 @@ class AcceptanceTests(unittest.TestCase):
         with (
             patch("sys.argv", ["manual-running.py"]),
             patch.object(sys.stdin, "isatty", return_value=False),
+            patch.object(manual.subprocess, "Popen") as native,
+            self.assertRaises(SystemExit),
+        ):
+            manual.main()
+        native.assert_not_called()
+
+    def test_authorized_agent_is_explicit_and_never_allowed_in_ci(self):
+        with (
+            patch("sys.argv", ["manual-running.py", "--authorized-agent"]),
+            patch.dict(manual.os.environ, {"CI": "true"}),
             patch.object(manual.subprocess, "Popen") as native,
             self.assertRaises(SystemExit),
         ):

@@ -421,6 +421,18 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             release.check_running_evidence(root)
 
+    def test_authorized_agent_evidence_preserves_honest_initiation(self):
+        root, _ = self.operation_fixture("1.0.0")
+        path = root / "test/evidence/running-descendants.json"
+        record = json.loads(path.read_text())
+        record.update(ownerSubmitted=False, ownerAuthorizedAgent=True)
+        path.write_text(json.dumps(record))
+        release.check_running_evidence(root)
+        record["ownerSubmitted"] = True
+        path.write_text(json.dumps(record))
+        with self.assertRaises(ValueError):
+            release.check_running_evidence(root)
+
     def test_ambiguous_publish_failure_is_never_retried(self):
         with self.operation("publish", npm_failure=True) as (calls, _, verify, _, _):
             with self.assertRaises(release.subprocess.CalledProcessError):

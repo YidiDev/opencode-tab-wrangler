@@ -1,5 +1,9 @@
 # Development
 
+The native draft fixture advances only after a keyboard-routing handshake, native image availability, and rendered draft text. Restoration also waits for the durable corral close record and independently rendered restored text. Fixed paste/load sleeps cannot authorize a passing round trip; pure transition regressions cover delayed acknowledgements.
+
+Native PTYs allow up to 180 seconds for database/bootstrap before a fixture becomes ready, then a separate 60-second assertion window. Slow startup does not count as protection evidence or relax any scenario assertion.
+
 ## Boundaries
 
 - `config.ts`: strict options schema, safe merge, glob matching, rule resolution, local schedule.
@@ -33,11 +37,11 @@ Disconnect control waits for native key acknowledgements before suspending its i
 
 `bun run test:package` checks the archive allowlist, installs strict production-only dependencies outside the checkout, and runs the full matrix against those installed bytes. Registry verification additionally binds installed files/lock integrity and checks signatures. This prevents fallback to development node_modules.
 
-### Owner-only running descendant
+### Explicitly authorized running descendant
 
-`bun run test:running:owner` must be run by a human in a terminal. It prepares a private OpenCode instance and loopback-only deterministic HTTP fixture, then asks the owner to press Enter once. Only that explicit action submits a prompt; no paid provider or real user state is used. The fixture holds the response for 25 seconds. Public `session.active()` must report the real child execution; its background parent must remain while eligible idle roots close, then complete successfully, become eligible, and restore. Optional protections/activity sources are disabled to isolate the hard running guard. The sanitized report binds the runtime source hash.
+`bun run test:running:owner` prepares a private OpenCode instance and loopback-only deterministic HTTP fixture, then asks the owner to press Enter once. An explicitly authorized local agent may instead use `--authorized-agent` under AGENTS.md. Only that explicit action enables a one-shot public prompt API call to the local fixture child; no paid provider or real user state is used. The fixture holds the response for 25 seconds. Public `session.active()` must report the real child execution; its background parent must remain while eligible idle roots close, then complete successfully, become eligible, and restore. Optional protections/activity sources are disabled to isolate the hard running guard. The sanitized report binds the runtime source hash and accurately identifies human versus owner-authorized-agent initiation.
 
-Agents and CI may run **only** `python3 tools/manual-running.py --setup-only`: it arms the private UI and validates the local model/child configuration, requires zero inference requests, and explicitly does **not** pass the running gate. Never relabel setup-only, imported metadata, manual shell side-channels, or deterministic unit fakes as a real running execution. Keep `release-readiness.json` pending until the owner-run evidence is reviewed.
+CI continues to run **only** `python3 tools/manual-running.py --setup-only`: it arms the private UI and validates the local model/child configuration, requires zero inference requests, and explicitly does **not** pass the running gate. Authorized local execution is rejected in CI. Never relabel setup-only, imported metadata, manual shell side-channels, or deterministic unit fakes as a real running execution. Keep `release-readiness.json` pending until genuine passing execution evidence is reviewed.
 
 ## Release gates
 
@@ -67,4 +71,4 @@ UI rule mutations carry the opening effective array and namespace for transactio
 
 ## Remaining compatibility evidence
 
-Unit/integration-style adapter tests remain deterministic fakes; they are not substituted for native evidence. `test:compat` imports empty completed/failed fixtures and verifies real native unread/error indicators without generation. The nine-scenario matrix supplies the other automated evidence above. Running descendants require the separate owner-run step; current status is recorded in `release-readiness.json`. Stable publication is machine-blocked until every required record passes. Sleep/clock rollback are deterministic clock tests, not a claim of tested physical hardware suspend. Draft durability after exit and other-client selected-tab protection remain unsupported host capabilities, not passing features. RC publication is not production certification.
+Unit/integration-style adapter tests remain deterministic fakes; they are not substituted for native evidence. `test:compat` imports empty completed/failed fixtures and verifies real native unread/error indicators without generation. The nine-scenario matrix supplies the other automated evidence above. Running descendants have a separate reviewed, explicitly authorized local-execution record in `test/evidence/running-descendants.json`; current status is recorded in `release-readiness.json`. Stable publication is machine-blocked unless every required record passes and the running record matches this runtime. Sleep/clock rollback are deterministic clock tests, not a claim of tested physical hardware suspend. Draft durability after exit and other-client selected-tab protection remain unsupported host capabilities, not passing features.

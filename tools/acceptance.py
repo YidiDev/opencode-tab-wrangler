@@ -37,6 +37,19 @@ def runtime_hash(directory=REPO):
     return digest.hexdigest()
 
 
+class NativeBudget:
+    """Bootstrap is bounded separately; scenario progress never renews assertion time."""
+
+    def __init__(self, now):
+        self.started = False
+        self.deadline = now + 180
+
+    def observe(self, phase, now):
+        if not self.started and phase not in {None, "starting"}:
+            self.started = True
+            self.deadline = now + 60
+
+
 def main():
     require_platform()
     parser = argparse.ArgumentParser(description=__doc__)

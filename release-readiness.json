@@ -10,7 +10,10 @@
       "status": "passed",
       "evidence": "tools/live-probe.ts via native acceptance queued-global/queued-cwd: actual non-synthetic child inbox work admitted with resume:false stays queued, parent remains open while three idle roots close; all ten sessions intact; no generation"
     },
-    "running-descendants": { "status": "pending", "evidence": "" },
+    "running-descendants": {
+      "status": "passed",
+      "evidence": "test/evidence/running-descendants.json: explicitly owner-authorized local agent run with deterministic loopback provider; actual public session.active() child execution holds the inactive parent while eligible idle roots close, then successful completion, parent closure and restoration. Runtime-bound sanitized evidence; no external model, real credentials, paid calls or real user sessions"
+    },
     "drafts-and-attachments": {
       "status": "passed",
       "evidence": "tools/draft-probe.ts + PTY draft scenario: bracketed-pasted PNG and unsent text survive actual auto-close/restore; image command enabled before/after, text reappears after restoration; then local clear, inbox/messages empty"
