@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.0
+
+- First stable release for OpenCode 2.1.4 on Linux x64, authored and maintained by Yidi Sprei (YidiDev), MIT-licensed with third-party notices.
+- Highly configurable preview/manual/automatic cleanup, ordered rules, per-tab locks/snoozes, schedules, batch/count controls, and searchable durable corral recovery. Defaults remain preview-first: minimum 3, soft maximum 8, 30-minute idle/grace, two-tab batches, all protections enabled.
+- Verified native queued/running-descendant protection, unread/errors, permissions/questions, unsent text/PNG recovery, disabled/global/cwd layouts, owner reload, restart/disconnection grace, and competing-terminal acknowledgement/recovery.
+- Real running-child execution evidence uses only an explicitly owner-authorized local dummy provider. The record identifies agent initiation honestly and is bound to this runtime; production code never initiates generation.
+- Exact tested archive publishing through GitHub OIDC directly to npm `latest`, provenance/signature and fresh registry/native installation checks, maintainer artifact approval, and immutable GitHub releases.
+- Preserve host limitations: other-client selected tabs are invisible; no atomic conditional close, globally exactly-once close, or durable drafts after exit is promised. Explicit shared-layout acknowledgement and a connection namespace remain required.
+
 ## 1.0.0-rc.2
 
 - First prepared public v1 candidate, authored and maintained by Yidi Sprei (YidiDev), MIT-licensed with explicit third-party notices.
@@ -13,7 +22,7 @@
 
 - Unapproved npm staging artifact used only to reserve the global package name. No candidate source was publicly published from that stage. Do not approve/install this reservation artifact.
 
-## Unreleased
+## Development history before 1.0.0
 
 - Publish fresh stable archives directly to `latest` through trusted publishing, following attention-inbox's release pattern; remove the unnecessary privileged retagging job and permission prerequisite.
 - Verify expected registry tags read-only, and stop for explicit recovery if an existing version has a different tag.

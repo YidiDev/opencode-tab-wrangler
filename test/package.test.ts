@@ -60,18 +60,22 @@ test("automated queued fixture cannot wake generation", async () => {
   const calls = [...fixture.matchAll(/\.session\.prompt\(\{([\s\S]*?)\}\)/g)];
   expect(calls).toHaveLength(1);
   expect(calls[0][1]).toContain("resume: false");
-  for (const name of [
-    "running",
-    "draft",
-    "lifecycle",
-    "transport",
-    "competing",
-  ]) {
+  for (const name of ["draft", "lifecycle", "transport", "competing"]) {
     const source = await Bun.file(`tools/${name}-probe.ts`).text();
     expect(source).not.toMatch(
       /\.session\.(prompt|generate|interrupt|remove)\(/,
     );
   }
+});
+test("running fixture execution requires explicit local authorization", async () => {
+  const source = await Bun.file("tools/running-probe.ts").text();
+  expect(source).toContain(
+    "context.options.submit === true && !report.submitted",
+  );
+  expect(source).toContain('"owner-authorized-agent"');
+  expect(source).toContain('selected?.providerID !== "fixture"');
+  expect(source).toContain("draft.submitted = true");
+  expect(source).not.toMatch(/\.session\.(generate|interrupt|remove)\(/);
 });
 test("normal release workflow has no separate privileged retagging job", async () => {
   const workflow = await Bun.file(".github/workflows/release.yml").text();

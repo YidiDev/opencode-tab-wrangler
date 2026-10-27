@@ -1,0 +1,13 @@
+{
+  "scenario": "running-descendants",
+  "status": "passed",
+  "host": "2.1.4",
+  "platform": "linux-x64",
+  "runtimeSha256": "fa3259b4c7b4f0ac2212af4d7cebf53000ea62dfe8674266fd730d5d7eb60cbe",
+  "provider": "loopback-only deterministic fixture",
+  "ownerSubmitted": false,
+  "ownerAuthorizedAgent": true,
+  "protectedDuringEligibleIdleCleanup": true,
+  "completedParentClosedAndRestored": true,
+  "timestamp": "2026-10-26T20:59:43Z"
+}

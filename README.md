@@ -1,29 +1,29 @@
 # OpenCode Tab Wrangler
 
-**Release status:** `1.0.0-rc.2` is a prerelease, not stable v1. npm currently points both `next` and `latest` to this RC after its first real publication. Use an explicit RC version or `@next`; the `latest` label does not mean the remaining stable acceptance gates have passed. See [release policy](RELEASING.md).
+**Stable v1:** `1.0.0`, verified for OpenCode 2.1.4 on Linux x64. See [GitHub Releases](https://github.com/YidiDev/opencode-tab-wrangler/releases) and the [release policy](RELEASING.md).
 
 Configurable tab housekeeping for the **OpenCode 2.1.4 terminal**, inspired by the independent [Tab Wrangler browser extension](https://github.com/tabwrangler/tabwrangler). Keep tabs that matter; corral the rest without deleting their sessions.
 
-**v1 release candidate; no stable release yet.** Defaults to preview mode. No model calls, backend service, MCP server, telemetry, or access to transcript contents.
+Defaults to preview mode. The production plugin makes no model calls and adds no backend service, MCP server, telemetry, or access to transcript contents.
 
 **Author and maintainer: Yidi Sprei ([YidiDev](https://github.com/YidiDev)). Copyright © 2026 Yidi Sprei.** Original project material is MIT-licensed; third-party rights and notices remain separate. See [attribution and acknowledgements](THIRD_PARTY_NOTICES.md).
 
 **Compatibility:** OpenCode **2.1.4** only; automated/live evidence is Linux x64 with Bun **1.4.0**. Other platforms are unverified. Keep automatic cleanup in a single terminal when possible. This is not a replacement tab strip or a cross-terminal pinning system.
 
-## Install a published candidate
+## Install v1
 
-The unscoped npm name **`opencode-tab-wrangler`** belongs to npm account **`yididev`**. Do not install the `0.0.0-stage` name-reservation placeholder. Until a prerelease appears in [GitHub Releases](https://github.com/YidiDev/opencode-tab-wrangler/releases), use the local installation below.
+The unscoped npm name **`opencode-tab-wrangler`** belongs to npm account **`yididev`**. Do not install the `0.0.0-stage` name-reservation placeholder or treat a previous RC as the final release.
 
-For a published candidate, merge into global `~/.config/opencode/cli.json`:
+Merge into global `~/.config/opencode/cli.json`:
 
 ```json
 {
   "$schema": "https://opencode.ai/v2/cli.json",
-  "plugins": [{ "package": "opencode-tab-wrangler@next", "options": {} }]
+  "plugins": [{ "package": "opencode-tab-wrangler@1.0.0", "options": {} }]
 }
 ```
 
-For reproducible installation, replace `next` with the exact published version, such as `1.0.0-rc.2`. Stable releases will use `latest`; version 1.x describes this plugin, **not** compatibility with OpenCode V1. Preserve unrelated plugins. Do not add a duplicate local/npm registration.
+The exact version pins a reproducible installation; use `@latest` instead to track stable releases. Version 1.x describes this plugin, **not** compatibility with OpenCode V1. Preserve unrelated plugins. Do not add a duplicate local/npm registration.
 
 ## Install locally
 
@@ -309,7 +309,7 @@ Tests cover policy, configuration precedence, wildcard rules, family aggregation
 
 Additional regressions cover conflicting native/server unread indicators (positive error evidence wins), slow/late storage outcomes, post-persistence verification, unrelated-tab activity, inverse-order batch recovery, and bounded wildcard/cache churn. The live test also checks pending permission protection and that parked synthetic context does not prevent cleanup. Wildcards use bit-parallel matching with bounded caches; configuration and cached policies are immutable.
 
-The installed-package matrix also exercises real queued child work (`resume: false`, never executed), unsent text/image recovery, reload/restart/disconnection grace, disabled/global/cwd tabs, and two competing terminals. It deliberately does not claim other-client selection protection, atomic conditional close, or draft persistence after exit. A separate owner-run, loopback-only fixture is required for genuine running-descendant evidence; CI's setup-only check does not pass that gate. See [native acceptance details](DEVELOPMENT.md).
+The installed-package matrix also exercises real queued child work (`resume: false`, never executed), unsent text/image recovery, reload/restart/disconnection grace, disabled/global/cwd tabs, and two competing terminals. It deliberately does not claim other-client selection protection, atomic conditional close, or draft persistence after exit. A separately authorized loopback-only fixture proved genuine running-descendant protection and completion/recovery; its reviewed record is runtime-bound in `test/evidence/running-descendants.json`. CI's setup-only check does not itself pass that gate. See [native acceptance details](DEVELOPMENT.md).
 
 CI runs installed-package/live tests, TypeScript and Python linting, schema parity, dependency/credential checks, and full-production-module coverage accounting. Coverage floors are 80% lines/75% functions per production file and 85% aggregate; tests/helpers are not part of the custom production denominator. Property and race tests supplement coverage, not the reverse. Public CI includes CodeQL; required checks and high/critical CodeQL merge restrictions protect the canonical repository's `main` branch.
 

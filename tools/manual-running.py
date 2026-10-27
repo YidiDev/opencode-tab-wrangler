@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Owner-only native running-descendant evidence. --setup-only never submits anything."""
+"""Isolated native running evidence; explicit authorized-agent mode uses only the dummy provider."""
 
 import argparse
 import contextlib
@@ -27,10 +27,18 @@ REPO = Path(__file__).resolve().parents[1]
 def main():
     require_platform()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--setup-only", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--setup-only", action="store_true")
+    mode.add_argument(
+        "--authorized-agent",
+        action="store_true",
+        help="Explicit owner-authorized local dummy execution; never for CI",
+    )
     parser.add_argument("--package", type=Path, default=REPO)
     args = parser.parse_args()
-    if not args.setup_only and not sys.stdin.isatty():
+    if args.authorized_agent and os.environ.get("CI"):
+        raise SystemExit("CI must use --setup-only; authorized-agent execution is local only")
+    if not args.setup_only and not args.authorized_agent and not sys.stdin.isatty():
         raise SystemExit(
             "A human must run this in their terminal and press Enter. Agents/CI use --setup-only."
         )
@@ -200,7 +208,7 @@ def main():
         "tabs": {"enabled": True, "scope": "global"},
         "plugins": [
             {"package": str(args.package.resolve()), "options": options},
-            {"package": str(fixture)},
+            {"package": str(fixture), "options": {"submit": False}},
         ],
     }
     cli_path = config / "cli.json"
@@ -263,16 +271,27 @@ def main():
                             "PASS: isolated model/child/PTY setup only; ZERO inference requests. Running gate is NOT passed."
                         )
                         return
-                    print(
-                        "Private fixture ready. Press Enter HERE to submit ONE local-only fixture prompt. No paid provider or user session is used; wait for PASS.",
-                        flush=True,
-                    )
-                    input()
+                    if args.authorized_agent:
+                        print(
+                            "Authorized-agent execution: ONE isolated loopback-only fixture prompt; no external model or real user session.",
+                            flush=True,
+                        )
+                        time.sleep(1)
+                    else:
+                        print(
+                            "Private fixture ready. Press Enter HERE to submit ONE local-only fixture prompt. No paid provider or user session is used; wait for PASS.",
+                            flush=True,
+                        )
+                        input()
                     deadline = time.monotonic() + 120
                     admitted.set()
-                    os.write(master, b"\x1b[200~Reply once without tools.\x1b[201~")
-                    time.sleep(0.3)
-                    os.write(master, b"\r")
+                    cli["plugins"][1]["options"] = {
+                        "submit": True,
+                        "initiator": "owner-authorized-agent" if args.authorized_agent else "owner",
+                    }
+                    replacement = cli_path.with_suffix(".next")
+                    replacement.write_text(json.dumps(cli))
+                    replacement.replace(cli_path)
                     prompted = True
                 if report["phase"] == "working" and not enabled:
                     options["mode"] = "auto"
@@ -312,7 +331,8 @@ def main():
                         "platform": "linux-x64",
                         "runtimeSha256": before,
                         "provider": "loopback-only deterministic fixture",
-                        "ownerSubmitted": True,
+                        "ownerSubmitted": not args.authorized_agent,
+                        "ownerAuthorizedAgent": args.authorized_agent,
                         "protectedDuringEligibleIdleCleanup": True,
                         "completedParentClosedAndRestored": True,
                         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

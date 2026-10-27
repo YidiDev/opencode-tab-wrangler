@@ -1,6 +1,6 @@
 {
   "name": "opencode-tab-wrangler",
-  "version": "1.0.0-rc.2",
+  "version": "1.0.0",
   "description": "Configurable, safety-first tab housekeeping for the OpenCode terminal",
   "type": "module",
   "license": "MIT",
