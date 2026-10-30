@@ -1,5 +1,7 @@
 # Releasing OpenCode Tab Wrangler
 
+OpenCode compatibility is forward-eligible from 2.1.4, not exact-patch gated. Preserve baseline acceptance evidence and forward-host checks in each release; narrow compatibility only when actual evidence warrants it. Preview remains the default, not a forced fallback for newer recognized versions.
+
 Author and maintainer: **Yidi Sprei (YidiDev)**. npm owner: **yididev**.
 No automation changes local users' OpenCode settings. Releases have no calendar restriction.
 
@@ -82,7 +84,7 @@ drift does not rewrite the release inventory. It is revalidated against the tag 
 If the artifact has expired, recover the original bytes/metadata from the release or inspect
 the situation manually; never substitute new bytes for an already published version.
 An existing identical npm version is verified and reused; different bytes stop the release.
-After a successful publish response, missing version/tag visibility receives at most 12 read-only verification attempts with five-second intervals (each request also has its own timeout). Integrity mismatches and other errors stop immediately. These reads never repeat `npm publish` or run `npm dist-tag`. If visibility remains uncertain, inspect the registry before an owner resumes the failed run; an already-visible matching version is verified, not republished. If its tag differs, stop for explicit owner recovery instead of silently retagging it.
+After a successful publish response, missing version/tag/archive visibility receives at most 60 read-only verification attempts with five-second intervals. No new retries start after five minutes; an in-flight request has its own timeout. Integrity mismatches and other errors stop immediately. These reads never repeat `npm publish` or run `npm dist-tag`. If visibility remains uncertain, inspect the registry before an owner resumes the failed run; an already-visible matching version is verified, not republished. If its tag differs, stop for explicit owner recovery instead of silently retagging it.
 
 Registry/network ambiguity never triggers an automatic publish retry. A failed registry smoke prevents GitHub finalization, but cannot undo an admitted npm publication. Before fresh stable publication, the workflow refuses to downgrade an existing newer latest or replace an unknown current version; a recognized RC at the same or lower base version is allowed. A partially uploaded draft requires inspection; assets are never clobbered.
 

@@ -24,6 +24,7 @@ from transport_control import DisconnectControl
 
 repo = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
+parser.add_argument("--host-version", default="2.1.4", help="Exact native host under test")
 parser.add_argument(
     "--scope", choices=("global", "cwd"), default="global", help="Native tab layout scope"
 )
@@ -57,9 +58,9 @@ if args.compat or args.lifecycle:
     args.cleanup = True
 binary = shutil.which("opencode")
 if not binary:
-    raise SystemExit("OpenCode 2.1.4 is required")
+    raise SystemExit("The requested OpenCode host is required")
 version = subprocess.check_output([binary, "--version"], text=True).strip()
-if version not in ("opencode v2.1.4", "2.1.4", "v2.1.4"):
+if version not in (f"opencode v{args.host_version}", args.host_version, f"v{args.host_version}"):
     raise SystemExit(f"Unsupported host: {version}")
 root = repo / ".artifacts" / f"live-{time.time_ns()}"
 root.mkdir(mode=0o700)

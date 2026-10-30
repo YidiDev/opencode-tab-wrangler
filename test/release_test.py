@@ -288,9 +288,44 @@ class ReleaseTests(unittest.TestCase):
             self.assertFalse(any(c[0] == "npm" for c in calls))
 
     def test_visibility_wait_rejects_unbounded_or_empty_budgets(self):
-        for attempts, delay in [(0, 5), (13, 5), (3, -1), (3, 6)]:
+        for attempts, delay in [(0, 5), (61, 5), (3, -1), (3, 6)]:
             with self.subTest(attempts=attempts, delay=delay), self.assertRaises(ValueError):
                 release.wait_for_registry({}, attempts=attempts, delay=delay)
+
+    def test_archive_404_is_visibility_not_a_publish_retry(self):
+        manifest = self.inspect()
+        data = {
+            "dist": {
+                "integrity": manifest["integrity"],
+                "tarball": f"{release.REGISTRY}/{release.NAME}/-/test.tgz",
+            }
+        }
+        for status in [404, 503]:
+            with (
+                patch.object(release, "registry_version", return_value=data),
+                patch.object(
+                    release.urllib.request,
+                    "urlopen",
+                    side_effect=urllib.error.HTTPError("url", status, "test", {}, None),
+                ),
+                self.assertRaises(
+                    release.RegistryNotVisible if status == 404 else urllib.error.HTTPError
+                ),
+            ):
+                release.verify_registry(manifest)
+
+    def test_visibility_wall_budget_prevents_new_retry(self):
+        with (
+            patch.object(release.time, "monotonic", side_effect=[0, 0, 301]),
+            patch.object(release.time, "sleep") as sleep,
+            patch.object(
+                release, "verify_registry", side_effect=release.RegistryNotVisible()
+            ) as verify,
+            self.assertRaises(release.RegistryNotVisible),
+        ):
+            release.wait_for_registry({})
+        verify.assert_called_once()
+        sleep.assert_not_called()
 
     def test_context_rejects_forks(self):
         with (

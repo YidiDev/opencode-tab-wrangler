@@ -12,6 +12,20 @@ concurrency:
   group: check-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  forward-host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - run: python3 tools/install-host.py --version 2.2.2 >> "$GITHUB_PATH"
+      - run: python3 tools/pty-smoke.py --host-version 2.2.2 --cleanup
+      - run: python3 tools/pty-smoke.py --host-version 2.2.2 --compat
   quality:
     runs-on: ubuntu-24.04
     timeout-minutes: 15

@@ -1,14 +1,14 @@
 # OpenCode Tab Wrangler
 
-**Stable v1:** `1.0.0`, verified for OpenCode 2.1.4 on Linux x64. See [GitHub Releases](https://github.com/YidiDev/opencode-tab-wrangler/releases) and the [release policy](RELEASING.md).
+**Stable v1:** `1.0.1`, eligible for OpenCode 2.1.4 and newer. See [GitHub Releases](https://github.com/YidiDev/opencode-tab-wrangler/releases) and the [release policy](RELEASING.md).
 
-Configurable tab housekeeping for the **OpenCode 2.1.4 terminal**, inspired by the independent [Tab Wrangler browser extension](https://github.com/tabwrangler/tabwrangler). Keep tabs that matter; corral the rest without deleting their sessions.
+Configurable tab housekeeping for the **OpenCode 2.1.4+ terminal**, inspired by the independent [Tab Wrangler browser extension](https://github.com/tabwrangler/tabwrangler). Keep tabs that matter; corral the rest without deleting their sessions.
 
 Defaults to preview mode. The production plugin makes no model calls and adds no backend service, MCP server, telemetry, or access to transcript contents.
 
 **Author and maintainer: Yidi Sprei ([YidiDev](https://github.com/YidiDev)). Copyright © 2026 Yidi Sprei.** Original project material is MIT-licensed; third-party rights and notices remain separate. See [attribution and acknowledgements](THIRD_PARTY_NOTICES.md).
 
-**Compatibility:** OpenCode **2.1.4** only; automated/live evidence is Linux x64 with Bun **1.4.0**. Other platforms are unverified. Keep automatic cleanup in a single terminal when possible. This is not a replacement tab strip or a cross-terminal pinning system.
+**Compatibility:** OpenCode **2.1.4 and newer** are eligible for normal operation, including automatic cleanup when explicitly configured. Newer recognized versions are not forced into preview. Defaults remain preview-first; unavailable APIs/state still fail closed. The full native acceptance baseline is 2.1.4, with forward-host loading/cleanup/unread checks on 2.2.2, on Linux x64 with Bun **1.4.0**. Eligibility does not certify every future release/platform. Demonstrated incompatibilities can receive targeted exclusions or fixes. Keep automatic cleanup in a single terminal when possible. This is not a replacement tab strip or a cross-terminal pinning system.
 
 ## Install v1
 
@@ -19,7 +19,7 @@ Merge into global `~/.config/opencode/cli.json`:
 ```json
 {
   "$schema": "https://opencode.ai/v2/cli.json",
-  "plugins": [{ "package": "opencode-tab-wrangler@1.0.0", "options": {} }]
+  "plugins": [{ "package": "opencode-tab-wrangler@1.0.1", "options": {} }]
 }
 ```
 
