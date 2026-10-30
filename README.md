@@ -1,5 +1,7 @@
 # OpenCode Tab Wrangler
 
+Independent community plugin; not affiliated with or endorsed by the OpenCode project.
+
 **Stable v1:** `1.0.1`, eligible for OpenCode 2.1.4 and newer. See [GitHub Releases](https://github.com/YidiDev/opencode-tab-wrangler/releases) and the [release policy](RELEASING.md).
 
 Configurable tab housekeeping for the **OpenCode 2.1.4+ terminal**, inspired by the independent [Tab Wrangler browser extension](https://github.com/tabwrangler/tabwrangler). Keep tabs that matter; corral the rest without deleting their sessions.
@@ -50,7 +52,7 @@ Add the local checkout to your **global** `~/.config/opencode/cli.json` (merge w
 
 Use your own absolute checkout path if different. OpenCode reloads CLI configuration when it changes. Run `/wrangler` or choose **Tab Wrangler** from the command palette. Don't register the same package twice. This plugin has only a `./tui` entrypoint; it does not belong in server configuration.
 
-The plugin **does not install or enable itself**, and this repository does not change your OpenCode settings. Other OpenCode versions are rejected safely until tested.
+The plugin **does not install or enable itself**, and this repository does not change your OpenCode settings. OpenCode 2.1.4 and newer are live-eligible unless an incompatibility is demonstrated; older or unrecognized versions are rejected safely. Tested versions are documented separately from this eligibility policy.
 
 ## First use
 
