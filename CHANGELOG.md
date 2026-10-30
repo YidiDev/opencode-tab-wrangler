@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1
+
+- Allow normal operation on OpenCode 2.1.4 and newer instead of rejecting every version except 2.1.4. Preserve preview-first defaults and all fail-closed state/effect guards.
+- Add forward-version lifecycle regressions and integrity-pinned native smoke checks on OpenCode 2.2.2. Tested evidence remains distinct from general forward eligibility.
+- Handle observed npm tarball propagation 404s with bounded read-only verification, never automatic republishing.
+
 ## 1.0.0
 
 - First stable release for OpenCode 2.1.4 on Linux x64, authored and maintained by Yidi Sprei (YidiDev), MIT-licensed with third-party notices.

@@ -211,8 +211,13 @@ def verify_registry(manifest, require_provenance=False):
     url = data["dist"]["tarball"]
     if not url.startswith(f"{REGISTRY}/{NAME}/-/"):
         raise ValueError("Unexpected registry tarball URL")
-    with urllib.request.urlopen(url, timeout=60) as response:
-        content = response.read(10_000_001)
+    try:
+        with urllib.request.urlopen(url, timeout=60) as response:
+            content = response.read(10_000_001)
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            raise RegistryNotVisible("Registry archive is not yet visible") from None
+        raise
     if (
         len(content) > 10_000_000
         or "sha512-" + base64.b64encode(hashlib.sha512(content).digest()).decode()
@@ -224,19 +229,23 @@ def verify_registry(manifest, require_provenance=False):
     return content
 
 
-def wait_for_registry(manifest, require_provenance=False, attempts=12, delay=5):
+def wait_for_registry(manifest, require_provenance=False, attempts=60, delay=5):
     """Only repeat bounded metadata reads after a successful publish; never repeat a write."""
-    if not 1 <= attempts <= 12 or not 0 <= delay <= 5:
+    if not 1 <= attempts <= 60 or not 0 <= delay <= 5:
         raise ValueError("Registry visibility wait exceeds the reviewed read budget")
+    deadline = time.monotonic() + 300
     for attempt in range(attempts):
+        if time.monotonic() >= deadline:
+            raise RegistryNotVisible("Registry visibility wait expired; inspect before resuming")
         try:
             content = verify_registry(manifest, require_provenance)
             verify_channel(manifest)
             return content
         except RegistryNotVisible:
-            if attempt + 1 == attempts:
+            remaining = deadline - time.monotonic()
+            if attempt + 1 == attempts or remaining <= 0:
                 raise
-            time.sleep(delay)
+            time.sleep(min(delay, remaining))
 
 
 def ensure_no_downgrade(version, latest):

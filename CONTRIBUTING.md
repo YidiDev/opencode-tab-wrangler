@@ -4,7 +4,7 @@ This preview CLI plugin is maintained by [@YidiDev](https://github.com/YidiDev).
 
 ## Setup and verification
 
-Use Linux x64, Bun **1.4.0**, Python **3.12**, and OpenCode **2.1.4**. Do not widen compatibility based only on a typecheck.
+Use Linux x64, Bun **1.4.0**, Python **3.12**, OpenCode **2.1.4** for the full acceptance baseline, and the pinned **2.2.2** forward-host checks. General 2.1.4+ eligibility is not evidence that every future host has passed the entire matrix; report actual incompatibilities with native evidence.
 
 ```sh
 bun install --frozen-lockfile

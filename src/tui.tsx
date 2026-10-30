@@ -27,14 +27,33 @@ const environment: Environment = {
   now: Date.now,
 };
 
+/** Forward-compatible eligibility, not a claim that every future release is tested. */
+export function supportsHost(version: unknown): boolean {
+  if (typeof version !== "string") return false;
+  const match =
+    /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([\da-zA-Z-]+(?:\.[\da-zA-Z-]+)*))?(?:\+[\da-zA-Z-]+(?:\.[\da-zA-Z-]+)*)?$/.exec(
+      version,
+    );
+  if (!match) return false;
+  const parts = match.slice(1, 4).map(Number);
+  if (!parts.every(Number.isSafeInteger)) return false;
+  if (match[4]?.split(".").some((part) => /^0\d+$/.test(part))) return false;
+  const [major, minor, patch] = parts;
+  return (
+    major > 2 ||
+    (major === 2 &&
+      (minor > 1 || (minor === 1 && (patch > 4 || (patch === 4 && !match[4])))))
+  );
+}
+
 export async function setup(
   context: Plugin.Context,
   env: Environment = environment,
 ) {
-  if (context.app.version.replace(/^v/, "") !== "2.1.4") {
+  if (!supportsHost(context.app.version)) {
     context.ui.toast.show({
       message:
-        "Tab Wrangler: this release supports OpenCode 2.1.4 only; cleanup disabled.",
+        "Tab Wrangler supports OpenCode 2.1.4 and newer; this host version is older or unrecognized, so cleanup is disabled.",
       variant: "warning",
     });
     return;

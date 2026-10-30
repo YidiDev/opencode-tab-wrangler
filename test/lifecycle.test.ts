@@ -103,12 +103,23 @@ function fixture(options: Record<string, unknown> = {}) {
 
 test("unsupported host registers no commands or timers", async () => {
   const f = fixture();
-  (f.context.app as any).version = "2.1.5";
+  (f.context.app as any).version = "2.1.3";
   expect(await setup(f.context, f.env)).toBeUndefined();
   expect(f.jobs.size).toBe(0);
   expect(f.commands()).toEqual([]);
   expect(f.messages[0]).toContain("supports OpenCode");
 });
+test.each(["2.1.5", "2.2.2", "2.10.0", "3.0.0"])(
+  "newer host %s is wired for normal operation",
+  async (version) => {
+    const f = fixture();
+    (f.context.app as any).version = version;
+    const dispose = await setup(f.context, f.env);
+    expect(f.commands().length).toBeGreaterThan(0);
+    expect(typeof dispose).toBe("function");
+    dispose?.();
+  },
+);
 test("invalid settings and unavailable storage fail closed before wiring", async () => {
   const f = fixture({ idleMinutes: -1 });
   expect(await setup(f.context, f.env)).toBeUndefined();

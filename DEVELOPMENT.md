@@ -1,5 +1,7 @@
 # Development
 
+Host eligibility is OpenCode 2.1.4+ without an upper version ceiling. Keep the full 2.1.4 acceptance baseline and integrity-pinned 2.2.2 forward-host smoke checks distinct from eligibility; neither certifies every future version. Newer hosts remain live-eligible unless evidence demonstrates incompatibility. Unknown state and missing API failures must remain fail-closed.
+
 The native draft fixture advances only after a keyboard-routing handshake, native image availability, and rendered draft text. Restoration also waits for the durable corral close record and independently rendered restored text. Fixed paste/load sleeps cannot authorize a passing round trip; pure transition regressions cover delayed acknowledgements.
 
 Native PTYs allow up to 180 seconds for database/bootstrap before a fixture becomes ready, then a separate 60-second assertion window. Slow startup does not count as protection evidence or relax any scenario assertion.

@@ -1,8 +1,8 @@
 # Security policy
 
-## Supported preview
+## Supported releases
 
-The preview supports **OpenCode 2.1.4**, tested on Linux x64 with Bun 1.4.0. Other versions are disabled, not implicitly supported. There is no response SLA or production certification.
+Stable v1.0.1 and newer are forward-eligible on **OpenCode 2.1.4+**. Native testing uses Linux x64 with Bun 1.4.0: the full acceptance baseline is 2.1.4, with additional forward-host smoke tests on 2.2.2. Eligibility does not certify all future hosts or platforms. Missing or ambiguous state remains protected, and demonstrated incompatibilities may receive targeted exclusions or fixes. There is no response SLA or blanket production certification.
 
 ## Report privately
 
